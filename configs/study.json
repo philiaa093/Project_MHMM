@@ -1,0 +1,8 @@
+{
+  "main_seed": 20261116,
+  "evaluation_seed": 30261116,
+  "main_repeats": 30,
+  "evaluation_repeats": 100,
+  "bootstrap_seed": 1701,
+  "bootstrap_repeats": 2000
+}

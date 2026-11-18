@@ -1,0 +1,10 @@
+{
+  "signals": [1024, 4096],
+  "eve_fractions": [0.0, 0.1, 1.0],
+  "noise_probabilities": [0.0, 0.03],
+  "sample_fractions": [0.1, 0.25, 0.5],
+  "repeats": 3,
+  "seed": 20261116,
+  "threshold": 0.05,
+  "min_samples": 100
+}
