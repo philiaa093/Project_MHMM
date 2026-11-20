@@ -10,6 +10,7 @@ from urllib.parse import quote, unquote, urlsplit
 import webbrowser
 
 from bb84_lab.bb84 import Config
+from bb84_lab.education import PacketInspector, lesson_session
 from bb84_lab.secure_channel import AuthenticationError
 
 
@@ -144,7 +145,7 @@ class DemoHandler(BaseHTTPRequestHandler):
         try:
             path = self._path()
             static = {"/": "index.html", "/index.html": "index.html",
-                      "/styles.css": "styles.css", "/app.js": "app.js"}
+                      "/styles.css": "styles.css", "/app.js": "app.js", "/education.js": "education.js"}
             if path in static:
                 file = ROOT / "web" / static[path]
                 if not file.is_file():
@@ -207,10 +208,34 @@ class DemoHandler(BaseHTTPRequestHandler):
             return
         try:
             path = self._path()
-            if path not in ("/api/session", "/api/aead"):
+            if path not in ("/api/session", "/api/aead", "/api/lesson", "/api/packet", "/api/packet/action"):
                 self._error(404, "Không tìm thấy đường dẫn", "not_found")
                 return
             payload = self._read_json()
+            if path == "/api/lesson":
+                if set(payload) - {"scenario", "seed"}:
+                    raise ValueError("Unsupported lesson fields")
+                result = lesson_session(payload.get("scenario", "clean"), payload.get("seed", 2026))
+                check_path = ROOT / "outputs" / "quantum_check.json"
+                result["circuit_check"] = None
+                if check_path.is_file():
+                    try:
+                        check = json.loads(check_path.read_text(encoding="utf-8"))
+                        if check.get("status") == "passed":
+                            result["circuit_check"] = {
+                                "shots_per_case": check["shots_per_case"],
+                                "cases": check["prepare_measure_cases"],
+                                "source": "outputs/quantum_check.json", "archived": True,
+                            }
+                    except (OSError, ValueError, KeyError, AttributeError):
+                        pass
+                self._json(200, result)
+                return
+            if path == "/api/packet/action":
+                if set(payload) != {"token", "action"}:
+                    raise ValueError("Unsupported packet action fields")
+                self._json(200, self.server.packet_inspector.act(payload["token"], payload["action"]))
+                return
             message = _message(payload.get("message", "Xin chào từ BB84 Lab"))
             if path == "/api/aead":
                 if set(payload) - {"message"}:
@@ -226,12 +251,21 @@ class DemoHandler(BaseHTTPRequestHandler):
                 config = Config(**{key: value for key, value in payload.items() if key in CONFIG_FIELDS})
                 if config.signals > 65536 or config.min_samples > 65536 or config.seed > 2**63 - 1:
                     raise ValueError("Giới hạn: signals/min_samples ≤ 65.536; seed ≤ 2^63−1")
-                from bb84_lab.demo import integrated_session
-                result = integrated_session(config, tamper=tamper, message=message)
+                if path == "/api/packet":
+                    from bb84_lab.demo import prepare_packet_session
+                    result, channel = prepare_packet_session(config, tamper=tamper)
+                    if channel is not None:
+                        result["packet"] = self.server.packet_inspector.create(channel, message)
+                else:
+                    from bb84_lab.demo import integrated_session
+                    result = integrated_session(config, tamper=tamper, message=message)
             self._json(200, result)
         except AuthenticationError:
             self._error(422, "Xác thực thất bại; phiên đã hủy, không phát hành khóa hoặc bản rõ",
-                        "authentication_failed")
+                         "authentication_failed")
+        except KeyError:
+            self._error(404, "Gói đã hết hạn, bị thay thế hoặc máy chủ đã khởi động lại. Tạo gói mới để thử tiếp.",
+                        "packet_expired")
         except (ValueError, TypeError, UnicodeError, RecursionError):
             self._error(400, "Thông số hoặc JSON không hợp lệ; kiểm tra kiểu, phạm vi và kích thước dữ liệu")
         except (TimeoutError, OSError):
@@ -246,6 +280,7 @@ def make_server(port=8765, study_dir=ROOT / "outputs" / "study"):
     server = ThreadingHTTPServer(("127.0.0.1", port), DemoHandler)
     server.daemon_threads = True
     server.study_dir = Path(study_dir).resolve()
+    server.packet_inspector = PacketInspector()
     return server
 
 

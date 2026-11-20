@@ -286,6 +286,18 @@ def aead_demo(message):
     return _exercise_aead(DemoChannel(), message)
 
 
+def prepare_packet_session(config, tamper=False):
+    """Prepare a fresh BB84 model channel for user-driven packet delivery."""
+    transmission, evaluation, decision, alice, bob = _authenticated_exchange(config, tamper)
+    processed = postprocess(transmission, evaluation, decision, alice, bob)
+    channel = (DemoChannel.from_simulated_keys(processed._alice_key, processed._bob_key)
+               if processed.status == "ready" else None)
+    result = {"session_id": alice.session_id, **asdict(config), **decision,
+              "transcript_authenticated": True, "postprocessing": processed.public_summary(),
+              "bb84_key_released": channel is not None, "packet": None}
+    return result, channel
+
+
 def integrated_session(config, tamper=False, message="Xin chào từ BB84"):
     if type(message) is not str or len(message.encode("utf-8")) > 16384:
         raise ValueError("Thông điệp phải là văn bản UTF-8 tối đa 16 KB")

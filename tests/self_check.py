@@ -14,6 +14,7 @@ import threading
 
 from bb84_lab.bb84 import Config, evaluate, expected_qber, monitor, run_session, simulate, wilson_interval
 from bb84_lab.demo import aead_demo, authenticated_session, integrated_session, public_decision
+from bb84_lab.education import PacketInspector, lesson_session
 from bb84_lab.research.experiments import load_config, run_experiments
 from bb84_lab.postprocess import key_budget, pack_bits, postprocess, reconcile, toeplitz_bits
 from bb84_lab.secure_channel import AuthenticatedTranscript, AuthenticationError, DemoChannel, check_secure_channel
@@ -32,7 +33,7 @@ def check_project_structure():
 
     modules = (
         "bb84_lab.app", "bb84_lab.bb84", "bb84_lab.demo", "bb84_lab.postprocess",
-        "bb84_lab.secure_channel", "bb84_lab.research_analysis",
+        "bb84_lab.secure_channel", "bb84_lab.research_analysis", "bb84_lab.education",
         "bb84_lab.research.experiments", "bb84_lab.research.study",
         "bb84_lab.research.plot_results", "bb84_lab.research.verify_quantum",
     )
@@ -43,7 +44,7 @@ def check_project_structure():
         assert Path(module.__file__).resolve() == root / (canonical.replace(".", "/") + ".py")
     from bb84_lab.app import ROOT, make_server
     assert ROOT == root
-    for relative in ("web/index.html", "web/app.js", "web/styles.css",
+    for relative in ("web/index.html", "web/app.js", "web/education.js", "web/styles.css",
                      "configs/smoke.json", "configs/main.json", "configs/study.json",
                      "docs/DEMO.md", "docs/de_cuong_QKD_3_tuan.md"):
         assert (root / relative).is_file(), relative
@@ -134,6 +135,80 @@ def check_demo():
     assert result["key_bytes"] == 32 and result["nonce_bytes"] == 12 and result["tag_bytes"] == 16
     assert result["ciphertext_bytes"] == result["plaintext_bytes"] + result["tag_bytes"]
     assert len(result["aad_sha256"]) == len(result["ciphertext_sha256"]) == 64
+
+
+def check_education():
+    for scenario in ("clean", "eve", "noise", "weak"):
+        lesson = lesson_session(scenario, 2026)
+        assert lesson == lesson_session(scenario, 2026)
+        assert not lesson["key_released"] and not lesson["application_key_material"]
+        rows, summary = lesson["signals"], lesson["summary"]
+        assert len(rows) == 16 and summary["status"] == "inconclusive"
+        assert sum(row["sifted"] for row in rows) == summary["sifted_count"]
+        assert sum(row["sampled"] for row in rows) == summary["sample_count"]
+        assert sum(row["retained"] for row in rows) == summary["remaining_count"]
+        assert sum(row["sampled"] and row["error"] for row in rows) == summary["sample_errors"]
+        assert not any(row["retained"] and row["sampled"] for row in rows)
+        for row in rows:
+            assert sum(row["bob_probabilities"]) == 1
+            assert row["bob_bit"] == (row["bob_before_noise"] ^ row["noise_flipped"])
+            assert row["sifted"] == (row["alice_basis"] == row["bob_basis"])
+        if scenario == "clean":
+            assert all(row["alice_bit"] == row["bob_bit"] for row in rows if row["sifted"])
+        if scenario == "eve":
+            assert all(row["intercepted"] and row["eve_basis"] in (0, 1) for row in rows)
+    trace = []
+    config = Config(signals=16, eve_fraction=1, noise_probability=.1)
+    assert simulate(config, trace=trace) == simulate(config)
+    assert len(trace) == 16
+    rejected(lambda: simulate(Config(), trace=[]))
+    rejected(lambda: lesson_session("invalid"))
+    rejected(lambda: lesson_session(seed=True))
+
+    for message in ("Chào Bob!", "", "đ" * 4096, "<img src=x onerror=alert(1)>"):
+        inspector = PacketInspector()
+        packet = inspector.create(DemoChannel(), message)
+        assert packet["plaintext_bytes"] == len(message.encode("utf-8"))
+        assert packet["ciphertext_bytes"] == packet["plaintext_bytes"] + 16
+        assert len(packet["tag_hex"]) == 32 and len(packet["nonce_hex"]) == 24
+        assert len(packet["ciphertext_preview_hex"]) <= 256
+        assert "plaintext" not in packet and "key" not in packet
+        rejected(lambda: inspector.act(packet["token"], "replay"))
+        damaged = inspector.act(packet["token"], "tamper")
+        assert damaged["reason"] == "invalid_tag" and not damaged["plaintext_released"]
+        assert int(damaged["original_byte"], 16) ^ int(damaged["changed_byte"], 16) == 1
+        assert "plaintext" not in damaged
+        assert damaged["changed_part"] == ("tag" if not message else "ciphertext")
+        recovered = inspector.act(packet["token"], "decrypt")
+        assert recovered["plaintext"] == message and recovered["roundtrip_ok"]
+        replay = inspector.act(packet["token"], "replay")
+        assert replay["reason"] == "replay" and not replay["plaintext_released"]
+        assert "plaintext" not in replay
+        assert inspector.act(packet["token"], "decrypt")["reason"] == "replay"
+        rejected(lambda: inspector.act(packet["token"], "tamper"))
+    now = [100.0]
+    inspector = PacketInspector(capacity=1, ttl=10, clock=lambda: now[0])
+    old = inspector.create(DemoChannel(), "one")
+    current = inspector.create(DemoChannel(), "two")
+    rejected(lambda: inspector.act(old["token"], "decrypt"), KeyError)
+    now[0] += 10
+    rejected(lambda: inspector.act(current["token"], "decrypt"), KeyError)
+    inspector = PacketInspector()
+    packet = inspector.create(DemoChannel(), "two simultaneous deliveries")
+    barrier = threading.Barrier(3)
+    deliveries = []
+    def deliver():
+        barrier.wait(timeout=5)
+        deliveries.append(inspector.act(packet["token"], "decrypt"))
+    threads = [threading.Thread(target=deliver) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    barrier.wait(timeout=5)
+    for thread in threads:
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert sorted(item["status"] for item in deliveries) == ["accepted", "rejected"]
+    assert next(item for item in deliveries if item["status"] == "rejected")["reason"] == "replay"
 
 
 def check_experiments():
@@ -368,7 +443,7 @@ def check_http():
         assert status == 200
         assert b'class="card crypto-stack"' in body and b'class="alternatives-table"' in body
         assert b'id="verification-title"' in body and b'id="download-verification"' in body
-        for url, filename in (("/app.js", "app.js"), ("/styles.css", "styles.css")):
+        for url, filename in (("/app.js", "app.js"), ("/education.js", "education.js"), ("/styles.css", "styles.css")):
             status, body = request(url)
             assert status == 200
             assert body == (Path(__file__).resolve().parents[1] / "web" / filename).read_bytes()
@@ -385,6 +460,30 @@ def check_http():
         assert request("/api/session", raw=b'{"seed":1,"seed":2}')[0] == 400
         assert request("/api/session", raw=b'{"eve_fraction":NaN}')[0] == 400
         assert request("/api/aead", {"message": "UTF-8"})[0] == 200
+        status, body = request("/api/lesson", {"scenario": "eve", "seed": 2026})
+        lesson = json.loads(body)
+        assert status == 200 and len(lesson["signals"]) == 16 and not lesson["key_released"]
+        assert request("/api/lesson", {"signals": 4096})[0] == 400
+        assert request("/api/lesson", {"seed": True})[0] == 400
+        status, body = request("/api/packet", {"message": "Chào Bob!"})
+        packet = json.loads(body)
+        assert status == 200 and packet["postprocessing"]["status"] == "ready"
+        token = packet["packet"]["token"]
+        assert packet["packet"]["ciphertext_bytes"] == 26
+        assert "plaintext" not in packet["packet"]
+        status, body = request("/api/packet/action", {"token": token, "action": "tamper"})
+        assert status == 200 and json.loads(body)["reason"] == "invalid_tag"
+        status, body = request("/api/packet/action", {"token": token, "action": "decrypt"})
+        assert status == 200 and json.loads(body)["plaintext"] == "Chào Bob!"
+        status, body = request("/api/packet/action", {"token": token, "action": "replay"})
+        assert status == 200 and "plaintext" not in json.loads(body)
+        for config in ({"eve_fraction": 1}, {"signals": 16}, {"signals": 1024}):
+            status, body = request("/api/packet", config)
+            assert status == 200 and json.loads(body)["packet"] is None
+        assert request("/api/packet", {"tamper_transcript": True})[0] == 422
+        assert request("/api/packet", {"message": "x" * 16385})[0] == 400
+        assert request("/api/packet/action", {"token": "x" * 43, "action": "decrypt"})[0] == 404
+        assert request("/api/packet/action", {"token": token, "action": "unknown"})[0] == 400
         assert request("/api/health", headers={"Host": "evil.example"})[0] == 403
         assert request("/api/session", {}, {"Origin": "https://evil.example"})[0] == 403
         assert request("/results/../requirements.txt")[0] == 404
@@ -404,6 +503,7 @@ if __name__ == "__main__":
     check_bb84()
     check_secure_channel()
     check_demo()
+    check_education()
     check_experiments()
     check_postprocessing()
     from bb84_lab.research.study import check_research

@@ -136,9 +136,11 @@ def monitor(
     }
 
 
-def simulate(config: Config) -> Transmission:
+def simulate(config: Config, *, trace=None) -> Transmission:
     if not isinstance(config, Config):
         raise TypeError("config must be a Config")
+    if trace is not None and (type(trace) is not list or config.signals != 16):
+        raise ValueError("A public teaching trace requires exactly 16 signals and a list")
     rng = random.Random(config.seed)
     alice_bits = []
     bob_bits = []
@@ -150,12 +152,25 @@ def simulate(config: Config) -> Transmission:
     for _ in range(config.signals):
         alice_bit, alice_basis, bob_basis = (rng.getrandbits(1) for _ in range(3))
         sent_bit, sent_basis = alice_bit, alice_basis
-        if rng.random() < config.eve_fraction:
+        intercepted = rng.random() < config.eve_fraction
+        eve_basis = None
+        if intercepted:
             eve_basis = rng.getrandbits(1)
             sent_bit = alice_bit if eve_basis == alice_basis else rng.getrandbits(1)
             sent_basis = eve_basis
         bob_bit = sent_bit if bob_basis == sent_basis else rng.getrandbits(1)
-        bob_bit ^= int(rng.random() < config.noise_probability)
+        before_noise = bob_bit
+        noise_flipped = rng.random() < config.noise_probability
+        bob_bit ^= int(noise_flipped)
+        if trace is not None:
+            # Explicit public teaching data only; never trace application-key sessions.
+            trace.append({"index": len(alice_bits), "alice_bit": alice_bit,
+                          "alice_basis": alice_basis, "bob_basis": bob_basis,
+                          "intercepted": intercepted, "eve_basis": eve_basis,
+                          "eve_bit": sent_bit if intercepted else None,
+                          "sent_bit": sent_bit, "sent_basis": sent_basis,
+                          "bob_before_noise": before_noise, "noise_flipped": noise_flipped,
+                          "bob_bit": bob_bit})
         alice_bits.append(alice_bit)
         bob_bits.append(bob_bit)
         alice_bases.append(alice_basis)

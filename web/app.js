@@ -65,7 +65,7 @@ function showError(selector, error) {
 }
 
 function setView(view, updateHash = true) {
-  if (!["simulation", "experiments", "about"].includes(view)) view = "simulation";
+  if (!["simulation", "lesson", "packet", "experiments", "about"].includes(view)) view = "simulation";
   document.querySelectorAll(".view").forEach((element) => { element.hidden = element.id !== `view-${view}`; });
   document.querySelectorAll("[data-view]").forEach((button) => {
     const active = button.dataset.view === view;
@@ -73,7 +73,7 @@ function setView(view, updateHash = true) {
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  document.title = `${{ simulation: "Mô phỏng", experiments: "Thí nghiệm", about: "Giới thiệu" }[view]} · BB84 Lab`;
+  document.title = `${{ simulation: "Mô phỏng", lesson: "BB84 từng bước", packet: "Mã hóa", experiments: "Thí nghiệm", about: "Giới thiệu" }[view]} · BB84 Lab`;
   if (updateHash && window.location.hash !== `#${view}`) window.history.pushState(null, "", `#${view}`);
   if (view === "experiments" && !study) loadStudy();
 }

@@ -20,6 +20,33 @@ Mở `http://127.0.0.1:8765`. Server chỉ lắng nghe loopback; nhấn `Ctrl+C`
 
 Trang **Mô phỏng** có năm kịch bản, tham số QBER, biểu đồ Wilson và khối **Dữ liệu đến Bob** đối chiếu số byte UTF-8, bản mã cộng tag và số byte khôi phục được backend xác nhận. Đổi đầu vào sẽ đánh dấu kết quả cũ để tránh nhầm cấu hình. Luồng xử lý khóa, **Nhật ký kiểm chứng thực thi** và phép thử AEAD độc lập nằm trong các mục mở rộng; lịch sử giữ 10 phiên gần nhất trong bộ nhớ trang. Nhật ký hiển thị công thức thay số, module/hàm backend, kích thước key/nonce/AAD/tag, kiểm tra sửa gói/phát lại và SHA-256; có thể tải JSON công khai để đối chiếu. Trang **Giới thiệu** có sơ đồ vai trò BB84 → hậu xử lý → ChaCha20-Poly1305 và đối sánh với B92, E91, ML-KEM, DH/ECDH. **Tải CSV** chỉ xuất thống kê công khai. Trang **Thí nghiệm** đọc bộ đã hoàn tất trong `outputs/study/`; dùng `python -m bb84_lab.app --study-dir outputs/study-new` để xem bộ khác. Kịch bản trình bày 5–7 phút: [docs/DEMO.md](docs/DEMO.md). Quy tắc giao diện: [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
 
+### Xem cơ chế ngay trên web
+
+- **BB84 từng bước** (`#lesson`): tạo 16 tín hiệu công khai bằng chính hàm mô
+  phỏng, rồi mở lần lượt 7 bước. Bảng hiển thị bit/cơ sở Alice–Eve–Bob, trạng
+  thái gửi, sàng lọc, mẫu bị loại và QBER. Chọn số tín hiệu để xem sơ đồ cổng
+  X/H/I/M, phép đo và chuẩn bị lại khi Eve can thiệp. Các bit bài học không
+  đi vào hậu xử lý hoặc mã hóa. Xác suất Bob được ghi rõ là lý thuyết trước
+  lỗi bit nền; biểu đồ Statevector/Aer lấy từ `outputs/quantum_check.json`
+  nếu tệp tồn tại, không chạy Qiskit trực tiếp khi bấm.
+- **Mã hóa** (`#packet`): nhập văn bản thử nghiệm, tạo một phiên BB84 mới và
+  chỉ mã hóa nếu hậu xử lý `ready`. Xem bản mã hex (tối đa 128 byte đầu),
+  tag riêng, nonce/AAD và kích thước. Thử **Sửa một byte** trước khi **Bob
+  giải mã gói gốc**, sau đó **Phát lại gói**. Bản rõ Bob hiển thị là dữ liệu
+  từ lời gọi giải mã backend, không sao chép ô nhập Alice. Chuỗi rỗng vẫn
+  có tag; phép thử khi đó sửa một bit trong tag và được ghi đúng tên.
+
+Phần xem gói là ngoại lệ hiển thị được yêu cầu cho demo: dùng thông điệp công
+khai; không ghi bản rõ/bản mã vào log, CSV hay tệp thí nghiệm. Server chỉ giữ
+tối đa 32 gói/kênh trong RAM; gói hết hạn sau 600 giây. Mục hết hạn được dọn
+trước thao tác/tạo gói tiếp theo. Khởi động lại server hoặc tải lại trang cần
+tạo gói mới. Đây vẫn là hai vai trò trong một tiến trình, không truyền khóa
+lượng tử vật lý hoặc gửi giữa hai máy độc lập.
+
+Các API mới chỉ phục vụ giao diện local: `POST /api/lesson`, `POST /api/packet`
+và `POST /api/packet/action`. Các API thống kê/demo cũ giữ định dạng công khai,
+không trả bit bài học hoặc nội dung thông điệp. Không cần thêm dependency.
+
 ## Chạy bằng CLI
 
 ```powershell
@@ -149,6 +176,7 @@ Hậu xử lý đã đo 3.300 kết quả trên cùng các phiên: **435 phiên 
 | `bb84_lab/postprocess.py` | Cascade, xác nhận, kế toán rò rỉ và Toeplitz |
 | `bb84_lab/secure_channel.py` | HMAC transcript, HKDF ràng buộc phiên và ChaCha20-Poly1305 |
 | `bb84_lab/demo.py` | Điều phối phiên tích hợp và CLI/demo AEAD riêng |
+| `bb84_lab/education.py` | Bài học 16 tín hiệu công khai và bộ giữ gói tạm cho thao tác mã hóa/giải mã |
 | `bb84_lab/app.py`, `web/` | HTTP local và giao diện HTML/CSS/JavaScript, không CDN |
 | `bb84_lab/research/experiments.py`, `bb84_lab/research/study.py` | Runner thống kê và quy trình hiệu chỉnh/đánh giá |
 | `bb84_lab/research_analysis.py` | Thống kê thuần, tiêu chí chọn tỷ lệ mẫu và bootstrap ghép cặp dùng chung |

@@ -115,6 +115,45 @@ quang học. Wilson và ngân sách entropy là công cụ giáo dục, chưa ph
 finite-key/composable. Kết quả “chưa tìm được tỷ lệ tốt hơn B0 theo tiêu chí đã
 đặt” vẫn là kết quả nghiên cứu hợp lệ.
 
+## Trình diễn cơ chế trên web
+
+Khi thầy muốn xem BB84 hoặc mã hóa đang làm gì, dùng hai trang sau. Dành
+khoảng 2–3 phút thay cho phần đọc log chi tiết, hoặc trình diễn riêng sau
+kịch bản 5–7 phút phía trên.
+
+### BB84 từng bước
+
+1. Mở **BB84 từng bước**, chọn **Kênh sạch**, seed `2026`, bấm **Tạo 16 tín hiệu**.
+2. Bấm **Bước tiếp theo**: giải thích bit/cơ sở, trạng thái, Eve, Bob đo,
+   sàng lọc, công khai mẫu, rồi QBER. Các ô chưa đến bước vẫn bị che bằng `·`.
+3. Bấm số thứ tự tín hiệu để xem sơ đồ X/H/I/M và xác suất Bob đo. Phân biệt
+   xác suất lý thuyết với kết quả đo cụ thể và với dữ liệu Aer đã lưu.
+4. Đổi sang **Eve chặn toàn bộ**, tạo lại, rồi **Hiện toàn bộ**. Với seed này,
+   bài học thu 9 vị trí cùng cơ sở, 2 mẫu và 1 sai khác (QBER mẫu 50%). Đây là
+   mẫu cực nhỏ; không nhầm với kỳ vọng 25% trên nhiều tín hiệu.
+5. Chỉ vào bước Eve đo rồi chuẩn bị lại và những ô mẫu sai khác. Nhấn mạnh:
+   các bit trên màn hình là bài học công khai, không dùng tạo khóa ứng dụng;
+   16 tín hiệu không đủ 100 mẫu kiểm tra.
+
+### Mã hóa và chủ động gây lỗi
+
+1. Mở **Mã hóa**. Giữ **Kênh sạch**, N `4096`, seed `2026`, nhập `Chào Bob!`.
+   Bấm **Thiết lập phiên và mã hóa**. Mỗi lần tạo là một phiên mới.
+2. Xem sơ đồ hai đường: BB84 → hậu xử lý → HKDF tạo khóa ứng dụng; văn bản
+   đi trực tiếp vào ChaCha20-Poly1305. Dữ liệu không truyền qua kênh lượng tử.
+3. Đối chiếu 10 byte UTF-8, 10 byte phần bản mã, 16 byte tag; tổng bản mã + tag
+   là 26 byte, chưa gồm nonce/AAD/đóng gói. Xem đoạn hex thực tế và tag riêng.
+4. Bấm **Sửa một byte**: backend lật một bit, xác thực thất bại, không trả
+   bản rõ. Gói gốc không bị thay đổi.
+5. Bấm **Bob giải mã gói gốc**: phần nhận hiện chính `Chào Bob!` do backend
+   giải mã và đối chiếu. Bấm **Phát lại gói**: bị từ chối theo số thứ tự;
+   thông điệp đang thấy vẫn là kết quả hợp lệ trước đó, không phải lần nhận mới.
+6. Đổi sang **Eve chặn toàn bộ**, tạo lại để thấy không phát hành gói mã hóa.
+   Các bản rõ/bản mã của lượt cũ được xóa khỏi vùng kết quả.
+
+Gói hết hạn sau 10 phút hoặc có thể bị thay thế khi bộ nhớ đạt giới hạn.
+Chỉ dùng thông điệp thử nghiệm công khai; bản rõ/bản mã không đưa vào log/CSV.
+
 ## Phương án CLI nếu cần trình bày qua terminal
 
 ```powershell
