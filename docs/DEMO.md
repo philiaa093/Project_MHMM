@@ -29,6 +29,12 @@ loại mẫu rồi đến QBER và khoảng Wilson. Với mặc định đã ki�
 Nhấn mạnh `continue` chỉ cho phép hậu xử lý. Chỉ khi hậu xử lý `ready` mới mã hóa.
 ID phiên, thời gian và khóa thay đổi giữa các lần chạy; khóa không hiển thị.
 
+Cuộn xuống **Nhật ký kiểm chứng thực thi**. Chỉ vào các dòng `BB84-01` đến
+`AEAD-02`: tên hàm backend, phép tính sàng lọc/lấy mẫu, QBER, Wilson, ngân sách
+Toeplitz và lời gọi `cryptography...ChaCha20Poly1305.encrypt/decrypt`. Bấm **Tải
+log JSON** để lưu dấu vết công khai cùng SHA-256. Đây là bằng chứng nhánh phần mềm
+đã chạy và số liệu khớp công thức, không phải bằng chứng có photon thật.
+
 ### 1:15–2:00 — Eve toàn phần và chỉ có nhiễu
 
 Chọn **Eve toàn phần**, bấm chạy: khoảng Wilson vượt ngưỡng, trạng thái bất thường,
@@ -91,6 +97,11 @@ vật liệu trước hậu xử lý; Y_final là đầu ra mô hình đo đư�
 Bấm **Tải CSV** trong **Nhật ký phiên** để cho thấy chỉ có thống kê công khai.
 Chỉ các manifest `complete` được dùng làm kết quả. Giới thiệu `tests/self_check.py`,
 `bb84_lab/research/verify_quantum.py`, `selection.json` và các seed/cấu hình đã lưu.
+
+Mở nhanh **Giới thiệu** để chốt câu hỏi “nếu không dùng BB84”: B92/E91 là các
+phương án QKD cần mô hình đo khác; ML-KEM phù hợp khi chỉ có hạ tầng phần mềm;
+DH/ECDH là đối sánh cổ điển và không chống máy lượng tử đủ mạnh. ChaCha20-Poly1305
+không thay BB84 vì nó mã hóa dữ liệu sau khi khóa đã được thiết lập.
 
 Kết thúc bằng phạm vi: mạch một qubit được đối chiếu Qiskit/Aer; không có phần cứng
 quang học. Wilson và ngân sách entropy là công cụ giáo dục, chưa phải chứng minh

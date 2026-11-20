@@ -18,7 +18,7 @@ python -m venv .venv
 
 Mở `http://127.0.0.1:8765`. Server chỉ lắng nghe loopback; nhấn `Ctrl+C` để dừng. Nếu cổng đang dùng, chạy `python -m bb84_lab.app --port 8766 --open`. Không cần Node.js, tài khoản cloud hoặc kích hoạt môi trường ảo.
 
-Trang **Mô phỏng** có năm kịch bản, tham số QBER, biểu đồ Wilson, luồng xử lý khóa, kiểm tra AEAD và lịch sử 10 phiên gần nhất trong bộ nhớ trang. **Tải CSV** chỉ xuất thống kê công khai. Trang **Thí nghiệm** đọc bộ đã hoàn tất trong `outputs/study/`; dùng `python -m bb84_lab.app --study-dir outputs/study-new` để xem bộ khác. Kịch bản trình bày 5–7 phút: [docs/DEMO.md](docs/DEMO.md).
+Trang **Mô phỏng** có năm kịch bản, tham số QBER, biểu đồ Wilson, luồng xử lý khóa, sơ đồ vai trò BB84 → hậu xử lý → ChaCha20-Poly1305, kiểm tra AEAD và lịch sử 10 phiên gần nhất trong bộ nhớ trang. Sau mỗi phiên, **Nhật ký kiểm chứng thực thi** hiển thị công thức đã thay số, module/hàm backend thực sự được gọi, kích thước key/nonce/AAD/tag, kết quả sửa bản mã/phát lại và dấu vân tay SHA-256; có thể tải JSON công khai để đối chiếu. Trang **Giới thiệu** đối sánh BB84 với B92, E91, ML-KEM và DH/ECDH, đồng thời chỉ rõ dữ liệu cần quan sát ở mỗi phương án. **Tải CSV** chỉ xuất thống kê công khai. Trang **Thí nghiệm** đọc bộ đã hoàn tất trong `outputs/study/`; dùng `python -m bb84_lab.app --study-dir outputs/study-new` để xem bộ khác. Kịch bản trình bày 5–7 phút: [docs/DEMO.md](docs/DEMO.md).
 
 ## Chạy bằng CLI
 
@@ -40,7 +40,7 @@ Trang **Mô phỏng** có năm kịch bản, tham số QBER, biểu đồ Wilson
 .\.venv\Scripts\python.exe -m bb84_lab.demo aead --message "Xin chào"
 ```
 
-Lệnh `bb84` trả JSON gồm cấu hình/seed, QBER, số bit, dữ liệu tiết lộ, trạng thái hậu xử lý và kết quả kiểm tra mã hóa. `bb84_key_released: true` chỉ có nghĩa đã tạo **khóa mô hình**; không chứng nhận khóa bí mật trước đối thủ thực tế. Không xuất khóa, bit thô, mẫu công khai hoặc PSK trong kết quả/nhật ký.
+Lệnh `bb84` trả JSON gồm cấu hình/seed, QBER, số bit, dữ liệu tiết lộ, trạng thái hậu xử lý, kết quả kiểm tra mã hóa và `verification` với từng bước tính toán cùng SHA-256 của log. `bb84_key_released: true` chỉ có nghĩa đã tạo **khóa mô hình**; không chứng nhận khóa bí mật trước đối thủ thực tế. Không xuất khóa, bit thô, giá trị mẫu công khai, nonce, bản rõ, bản mã hoặc PSK trong kết quả/nhật ký.
 
 ## Quy tắc mô hình và hủy phiên
 

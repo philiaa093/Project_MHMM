@@ -2,13 +2,14 @@
 
 import argparse
 from dataclasses import asdict, replace
+import hashlib
 import json
 import math
 import secrets
 import sys
 import time
 
-from bb84_lab.bb84 import Config, evaluate, monitor, simulate
+from bb84_lab.bb84 import Config, evaluate, expected_qber, monitor, simulate
 from bb84_lab.secure_channel import (
     AuthenticatedTranscript, AuthenticationError, DemoChannel, ReplayError,
 )
@@ -103,6 +104,7 @@ def authenticated_session(config, tamper=False):
 def _exercise_aead(channel, message):
     plaintext = message.encode("utf-8")
     packet = channel.encrypt(plaintext)
+    aad = DemoChannel._aad(packet.version, packet.session_id, packet.sender, packet.sequence)
     damaged = replace(packet, ciphertext=bytes([packet.ciphertext[0] ^ 1]) + packet.ciphertext[1:])
     try:
         channel.decrypt(damaged)
@@ -121,10 +123,163 @@ def _exercise_aead(channel, message):
         raise AssertionError("Gói phát lại đã được chấp nhận")
     return {
         "session_id": channel.session_id, "key_source": channel.key_source,
-        "algorithm": "ChaCha20-Poly1305", "plaintext_bytes": len(plaintext),
+        "algorithm": "ChaCha20-Poly1305",
+        "implementation": "cryptography.hazmat.primitives.ciphers.aead.ChaCha20Poly1305",
+        "key_bytes": 32, "nonce_bytes": 12, "tag_bytes": len(packet.ciphertext) - len(plaintext),
+        "aad_bytes": len(aad), "sequence": packet.sequence,
+        "aad_sha256": hashlib.sha256(aad).hexdigest(),
+        "ciphertext_sha256": hashlib.sha256(packet.ciphertext).hexdigest(),
+        "plaintext_bytes": len(plaintext),
         "ciphertext_bytes": len(packet.ciphertext), "roundtrip_ok": recovered == plaintext,
         "tamper_rejected": tamper_rejected, "replay_rejected": replay_rejected,
     }
+
+
+def _verification_log(session_id, config, decision, processed, encryption):
+    def entry(code, group, title, status, implementation, formula, result, values):
+        return {
+            "code": code, "group": group, "title": title, "status": status,
+            "implementation": implementation, "formula": formula,
+            "result": result, "values": values,
+        }
+
+    sample_count = decision["sample_count"]
+    sample_errors = decision["sample_errors"]
+    qber = decision["qber"]
+    ci_low = decision["ci_low"]
+    ci_high = decision["ci_high"]
+    entries = [
+        entry(
+            "BB84-01", "bb84", "Chuẩn bị và đo", "passed",
+            "bb84_lab.bb84.simulate",
+            "Alice chọn bit/cơ sở Z-X; Bob chọn cơ sở Z-X; Eve tùy chọn chặn-đo-gửi lại.",
+            f"N={config.signals}; seed={config.seed}; f={config.eve_fraction}; "
+            f"p={config.noise_probability}; QBER kỳ vọng mô hình={expected_qber(config.eve_fraction, config.noise_probability):.8f}.",
+            {"signals": config.signals, "seed": config.seed,
+             "eve_fraction": config.eve_fraction, "noise_probability": config.noise_probability,
+             "expected_qber": expected_qber(config.eve_fraction, config.noise_probability)},
+        ),
+        entry(
+            "BB84-02", "bb84", "Sàng lọc và lấy mẫu", "passed",
+            "bb84_lab.bb84.evaluate",
+            "n_sample = floor(alpha * n_sift); n_retained = n_sift - n_sample",
+            f"n_sift={decision['sifted_count']}; floor({config.sample_fraction} × "
+            f"{decision['sifted_count']})={sample_count}; n_retained={decision['remaining_count']}.",
+            {"sifted_count": decision["sifted_count"], "sample_fraction": config.sample_fraction,
+             "sample_count": sample_count, "remaining_count": decision["remaining_count"]},
+        ),
+    ]
+    if qber is None:
+        entries.append(entry(
+            "BB84-03", "bb84", "QBER và Wilson 95%", "stopped",
+            "bb84_lab.bb84.monitor / wilson_interval",
+            "q_hat = errors / n_sample; Wilson chỉ tính khi n_sample > 0",
+            "Không có mẫu công khai nên QBER và khoảng Wilson không xác định.",
+            {"sample_errors": sample_errors, "sample_count": sample_count,
+             "qber": None, "ci_low": None, "ci_high": None},
+        ))
+    else:
+        entries.append(entry(
+            "BB84-03", "bb84", "QBER và Wilson 95%", "passed",
+            "bb84_lab.bb84.monitor / wilson_interval",
+            "q_hat = errors / n_sample; Wilson 95% dùng z = 1.959963984540054",
+            f"{sample_errors} / {sample_count} = {qber:.8f}; "
+            f"CI95=[{ci_low:.8f}, {ci_high:.8f}].",
+            {"sample_errors": sample_errors, "sample_count": sample_count,
+             "qber": qber, "ci_low": ci_low, "ci_high": ci_high,
+             "z": 1.959963984540054},
+        ))
+    rules = {
+        "continue": "ci_high <= threshold",
+        "anomalous": "ci_low > threshold",
+        "inconclusive": "thiếu mẫu hoặc khoảng Wilson cắt ngưỡng",
+    }
+    entries.append(entry(
+        "BB84-04", "bb84", "Quyết định giám sát",
+        "passed" if decision["status"] == "continue" else "stopped",
+        "bb84_lab.bb84.monitor",
+        "continue nếu cận trên <= ngưỡng; anomalous nếu cận dưới > ngưỡng; còn lại inconclusive",
+        f"{rules[decision['status']]}; threshold={config.threshold}; "
+        f"status={decision['status']}; reason={decision['reason']}.",
+        {"threshold": config.threshold, "min_samples": config.min_samples,
+         "status": decision["status"], "reason": decision["reason"]},
+    ))
+
+    post_ran = processed.status not in ("skipped",)
+    entries.append(entry(
+        "POST-01", "postprocess", "Đối soát và xác nhận",
+        "passed" if processed.key_match else "failed" if processed.status == "failed" else "stopped",
+        "bb84_lab.postprocess.reconcile / postprocess",
+        "Cascade sửa Bob qua truy vấn parity; SHA-256 xác nhận hai chuỗi trước khi phát hành khóa.",
+        (f"retained={processed.retained_bits}; corrected={processed.corrected_errors}; "
+         f"parity_leak={processed.parity_leak_bits}; confirmation_leak={processed.confirmation_leak_bits}; "
+         f"key_match={processed.key_match}; status={processed.status}.") if post_ran
+        else f"Không chạy vì monitor status={decision['status']}.",
+        {"retained_bits": processed.retained_bits, "corrected_errors": processed.corrected_errors,
+         "parity_leak_bits": processed.parity_leak_bits,
+         "confirmation_leak_bits": processed.confirmation_leak_bits,
+         "key_match": processed.key_match, "status": processed.status},
+    ))
+    entries.append(entry(
+        "POST-02", "postprocess", "Ngân sách và Toeplitz",
+        "passed" if processed.status == "ready" else "stopped",
+        "bb84_lab.postprocess.key_budget / toeplitz_bits",
+        "entropy=floor(n_retained*(1-h2(ci_high))); output=floor8(max(0, entropy-leak_parity-leak_confirm-64))",
+        f"entropy={processed.entropy_budget_bits}; output={processed.output_bits}; "
+        f"cần >=256 bit; status={processed.status}; reason={processed.reason}.",
+        {"qber_upper": ci_high, "entropy_budget_bits": processed.entropy_budget_bits,
+         "parity_leak_bits": processed.parity_leak_bits,
+         "confirmation_leak_bits": processed.confirmation_leak_bits,
+         "safety_bits": 64, "output_bits": processed.output_bits,
+         "status": processed.status, "reason": processed.reason},
+    ))
+
+    if encryption:
+        entries.extend((
+            entry(
+                "AEAD-01", "aead", "Mã hóa ChaCha20-Poly1305", "passed",
+                encryption["implementation"] + ".encrypt",
+                "ciphertext_and_tag = encrypt(nonce_96_bit, plaintext, AAD)",
+                f"key={encryption['key_bytes']} byte; nonce={encryption['nonce_bytes']} byte; "
+                f"AAD={encryption['aad_bytes']} byte; plaintext={encryption['plaintext_bytes']} byte; "
+                f"ciphertext+tag={encryption['ciphertext_bytes']} byte; tag={encryption['tag_bytes']} byte.",
+                {name: encryption[name] for name in (
+                    "key_bytes", "nonce_bytes", "aad_bytes", "plaintext_bytes",
+                    "ciphertext_bytes", "tag_bytes", "sequence", "aad_sha256",
+                    "ciphertext_sha256",
+                )},
+            ),
+            entry(
+                "AEAD-02", "aead", "Giải mã và chống sửa/phát lại", "passed",
+                encryption["implementation"] + ".decrypt",
+                "decrypt hợp lệ; lật 1 bit phải InvalidTag; sequence đã nhận phải bị từ chối khi phát lại",
+                f"roundtrip={encryption['roundtrip_ok']}; tamper_rejected={encryption['tamper_rejected']}; "
+                f"replay_rejected={encryption['replay_rejected']}.",
+                {"roundtrip_ok": encryption["roundtrip_ok"],
+                 "tamper_rejected": encryption["tamper_rejected"],
+                 "replay_rejected": encryption["replay_rejected"]},
+            ),
+        ))
+    else:
+        entries.append(entry(
+            "AEAD-00", "aead", "ChaCha20-Poly1305 chưa chạy", "not_run",
+            "bb84_lab.demo.integrated_session",
+            "Chỉ gọi ChaCha20Poly1305 khi postprocessing.status == 'ready'.",
+            f"postprocessing.status={processed.status}; không tạo bản mã.",
+            {"postprocessing_status": processed.status, "encryption": None},
+        ))
+
+    log = {
+        "version": "bb84-lab-verification-v1", "session_id": session_id,
+        "public_only": True,
+        "scope": "Dấu vết thực thi phần mềm; không phải bằng chứng QKD vật lý hoặc chứng minh an toàn mật mã.",
+        "omitted": ["raw bits", "sample bit values", "keys", "PSK", "nonce value", "plaintext", "ciphertext"],
+        "canonicalization": "UTF-8 JSON; ensure_ascii=false; sort_keys=true; separators=(',', ':')",
+        "entries": entries,
+    }
+    canonical = json.dumps(log, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    log["sha256"] = hashlib.sha256(canonical).hexdigest()
+    return log
 
 
 def aead_demo(message):
@@ -145,11 +300,13 @@ def integrated_session(config, tamper=False, message="Xin chào từ BB84"):
     if processed.status == "ready":
         channel = DemoChannel.from_simulated_keys(processed._alice_key, processed._bob_key)
         encryption = _exercise_aead(channel, message)
+    verification = _verification_log(alice.session_id, config, decision, processed, encryption)
     return {
         "session_id": alice.session_id, **asdict(config), **decision,
         "transcript_authenticated": True,
         "bb84_key_released": processed.status == "ready",
         "postprocessing": processed.public_summary(), "encryption": encryption,
+        "verification": verification,
         "timings": {"simulation_seconds": simulation_seconds,
                     "postprocessing_seconds": post_seconds,
                     "encryption_seconds": time.perf_counter() - encrypt_started if encryption else 0,

@@ -206,7 +206,8 @@ def postprocess(transmission, evaluation, decision, alice_auth, bob_auth, *,
     entropy, output_length = key_budget(length, decision["ci_high"], leak)
     stats["entropy_budget_bits"] = entropy
     if output_length < 256:
-        return PostprocessResult("insufficient_key", "Ngân sách mô hình không đủ 256 bit", **stats)
+        return PostprocessResult("insufficient_key", "Ngân sách mô hình không đủ 256 bit",
+                                 **stats, key_match=True)
     seed_length = length + output_length - 1
     seed_bytes = secrets.token_bytes((seed_length + 7) // 8)
     seed_bits = tuple((seed_bytes[index // 8] >> (7 - index % 8)) & 1 for index in range(seed_length))

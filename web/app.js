@@ -6,6 +6,7 @@ const percentFormat = new Intl.NumberFormat("vi-VN", { style: "percent", maximum
 const history = [];
 let study = null;
 let studyLoading = false;
+let lastVerification = null;
 const statusLabels = { continue: "Đủ điều kiện tiếp tục", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng" };
 const statusClasses = { continue: "success", anomalous: "danger", inconclusive: "warning" };
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
@@ -144,6 +145,70 @@ function metricValue(selector, value, unit = "") {
   }
 }
 
+function renderVerification(log, emptyMessage = "Chạy một phiên để xem dấu vết tính toán từ backend.") {
+  const empty = $("#verification-empty");
+  const content = $("#verification-content");
+  const button = $("#download-verification");
+  const groups = { bb84: $("#verification-bb84"), postprocess: $("#verification-postprocess"), aead: $("#verification-aead") };
+  for (const list of Object.values(groups)) list.replaceChildren();
+  if (!log || !Array.isArray(log.entries) || typeof log.sha256 !== "string") {
+    lastVerification = null;
+    empty.textContent = emptyMessage;
+    empty.hidden = false;
+    content.hidden = true;
+    button.disabled = true;
+    return;
+  }
+  const labels = { passed: "ĐÃ CHẠY", stopped: "DỪNG", failed: "LỖI", not_run: "CHƯA GỌI" };
+  for (const entry of log.entries) {
+    const list = groups[entry.group];
+    if (!list) continue;
+    const item = document.createElement("li");
+    item.className = "verification-entry";
+    const head = document.createElement("div");
+    head.className = "verification-entry-head";
+    const code = document.createElement("span");
+    code.className = "verification-code";
+    code.textContent = entry.code || "TRACE";
+    const title = document.createElement("strong");
+    title.textContent = entry.title || "Bước thực thi";
+    const status = document.createElement("span");
+    status.className = `verification-status ${entry.status || "not_run"}`;
+    status.textContent = labels[entry.status] || "TRẠNG THÁI";
+    const implementation = document.createElement("code");
+    implementation.className = "verification-implementation";
+    implementation.textContent = entry.implementation || "—";
+    const formula = document.createElement("p");
+    formula.className = "verification-formula";
+    formula.textContent = entry.formula || "—";
+    const result = document.createElement("p");
+    result.className = "verification-result";
+    result.textContent = entry.result || "—";
+    head.append(code, title, status);
+    item.append(head, implementation, formula, result);
+    list.append(item);
+  }
+  lastVerification = log;
+  text("#verification-sha", log.sha256);
+  empty.hidden = true;
+  content.hidden = false;
+  button.disabled = false;
+}
+
+function downloadVerification() {
+  if (!lastVerification) return;
+  const session = String(lastVerification.session_id || "session").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "session";
+  const blob = new Blob([JSON.stringify(lastVerification, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `bb84-verification-${session}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function resetSessionAfterError() {
   metricValue("#metric-qber", "—", "%");
   metricValue("#metric-samples", "—");
@@ -166,6 +231,7 @@ function resetSessionAfterError() {
   $("#integrated-encryption").classList.remove("success");
   $("#session-details").hidden = true;
   text("#runtime-label", "PHIÊN ĐÃ HỦY");
+  renderVerification(null, "Phiên bị hủy trước khi backend tạo được nhật ký kiểm chứng hợp lệ.");
 }
 
 function renderSession(result) {
@@ -213,6 +279,7 @@ function renderSession(result) {
   text("#runtime-label", finite(elapsed) ? `${formatNumber(elapsed * 1000)} MS` : "ĐÃ HOÀN TẤT");
   $("#session-details").hidden = false;
   text("#session-details", `Phiên ${String(result.session_id || "—")} · seed ${formatNumber(result.seed)} · Ngân sách mô hình ${formatNumber(post.entropy_budget_bits)} bit${finite(post.confirmation_leak_bits) ? ` · Xác nhận tiết lộ ${formatNumber(post.confirmation_leak_bits)} bit` : ""}`);
+  renderVerification(result.verification);
 }
 
 function addHistory(result) {
@@ -295,7 +362,7 @@ async function runAead(event) {
     for (const [label] of checks) { const item = document.createElement("span"); item.textContent = label; list.append(item); }
     const note = document.createElement("p");
     note.className = "input-help";
-    note.textContent = `${formatNumber(result.plaintext_bytes)} byte thông điệp · ${formatNumber(result.ciphertext_bytes)} byte bản mã và tag · Khóa ngẫu nhiên riêng, không dùng bit BB84.`;
+    note.textContent = `${result.implementation || result.algorithm} · khóa ${formatNumber(result.key_bytes)} byte · nonce ${formatNumber(result.nonce_bytes)} byte · AAD ${formatNumber(result.aad_bytes)} byte · tag ${formatNumber(result.tag_bytes)} byte · ${formatNumber(result.plaintext_bytes)} byte bản rõ thành ${formatNumber(result.ciphertext_bytes)} byte bản mã+tag · SHA-256 ${String(result.ciphertext_sha256 || "").slice(0, 16)}…`;
     host.replaceChildren(list, note);
   } catch (error) {
     host.textContent = error.message;
@@ -467,6 +534,7 @@ for (const id of ["signals", "eve", "noise", "sample", "threshold", "min-samples
 $("#simulation-form").addEventListener("submit", runSession);
 $("#aead-form").addEventListener("submit", runAead);
 $("#download-history").addEventListener("click", downloadHistory);
+$("#download-verification").addEventListener("click", downloadVerification);
 $("#refresh-study").addEventListener("click", loadStudy);
 $("#study-n").addEventListener("change", renderStudyChart);
 $("#study-noise").addEventListener("change", renderStudyChart);

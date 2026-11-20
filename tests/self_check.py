@@ -130,6 +130,10 @@ def check_demo():
     result = aead_demo("Kiểm tra UTF-8: tiếng Việt")
     assert result["roundtrip_ok"] and result["tamper_rejected"] and result["replay_rejected"]
     assert "độc lập với BB84" in result["key_source"]
+    assert result["implementation"].endswith("ChaCha20Poly1305")
+    assert result["key_bytes"] == 32 and result["nonce_bytes"] == 12 and result["tag_bytes"] == 16
+    assert result["ciphertext_bytes"] == result["plaintext_bytes"] + result["tag_bytes"]
+    assert len(result["aad_sha256"]) == len(result["ciphertext_sha256"]) == 64
 
 
 def check_experiments():
@@ -311,11 +315,32 @@ def check_postprocessing():
                    Config(noise_probability=1, threshold=1)):
         result = integrated_session(config)
         ready = result["postprocessing"]["status"] == "ready"
+        verification = result["verification"]
+        unsigned = {key: value for key, value in verification.items() if key != "sha256"}
+        canonical = json.dumps(unsigned, ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")
+        assert hashlib.sha256(canonical).hexdigest() == verification["sha256"]
+        assert verification["public_only"] and verification["session_id"] == result["session_id"]
+        codes = {entry["code"] for entry in verification["entries"]}
+        assert {"BB84-01", "BB84-02", "BB84-03", "BB84-04", "POST-01", "POST-02"} <= codes
+        public_keys, pending = set(), [verification]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, dict):
+                public_keys.update(item)
+                pending.extend(item.values())
+            elif isinstance(item, list):
+                pending.extend(item)
+        assert not {"alice_bits", "bob_bits", "sample_alice_bits", "_alice_key", "_bob_key", "psk", "key"} & public_keys
         assert result["bb84_key_released"] == ready
         if ready:
             assert result["postprocessing"]["key_match"] and result["encryption"]["roundtrip_ok"]
+            assert {"AEAD-01", "AEAD-02"} <= codes
         else:
             assert result["encryption"] is None and result["postprocessing"]["output_bits"] == 0
+            assert "AEAD-00" in codes
+        if result["postprocessing"]["confirmation_leak_bits"]:
+            assert result["postprocessing"]["key_match"] or result["postprocessing"]["status"] == "failed"
 
 
 def check_http():
@@ -339,13 +364,18 @@ def check_http():
             connection.close()
     try:
         assert request("/api/health")[0] == 200
-        assert request("/")[0] == 200
+        status, body = request("/")
+        assert status == 200
+        assert b'class="card crypto-stack"' in body and b'class="alternatives-table"' in body
+        assert b'id="verification-title"' in body and b'id="download-verification"' in body
         for url, filename in (("/app.js", "app.js"), ("/styles.css", "styles.css")):
             status, body = request(url)
             assert status == 200
             assert body == (Path(__file__).resolve().parents[1] / "web" / filename).read_bytes()
         status, body = request("/api/session", {})
-        assert status == 200 and json.loads(body)["encryption"]["roundtrip_ok"]
+        session = json.loads(body)
+        assert status == 200 and session["encryption"]["roundtrip_ok"]
+        assert session["verification"]["version"] == "bb84-lab-verification-v1"
         assert request("/api/session", {"eve_fraction": 1})[0] == 200
         status, body = request("/api/session", {"tamper_transcript": True})
         assert status == 422 and "postprocessing" not in json.loads(body)

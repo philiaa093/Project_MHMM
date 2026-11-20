@@ -1,9 +1,11 @@
 # Đề cương nghiên cứu: Giám sát can thiệp trên kênh phân phối khóa lượng tử bằng BB84
 
 **Phương án đề xuất:** Mô phỏng BB84, giám sát QBER và minh họa sử dụng khóa với ChaCha20-Poly1305.  
-**Ngày tổng hợp:** 16/11/2026. **Thời gian thực hiện:** 3 tuần.  
+**Ngày tổng hợp:** 16/11/2026. **Cập nhật yêu cầu:** 17/11/2026. **Thời gian thực hiện:** 3 tuần.<br>
 **Phạm vi đã xác nhận:** Giám sát nghe lén trên kênh trao đổi khóa.  
 **Giả định nguồn lực:** 1–2 người đã biết Python; khoảng 60–80 giờ công cho phạm vi tối thiểu; máy tính cá nhân; không yêu cầu thiết bị quang học hay tài khoản máy lượng tử.
+
+**Trọng tâm trình bày cập nhật:** chương trình ưu tiên hiển thị số liệu QBER, độ bất định, trạng thái phiên và lượng bit qua từng bước. Giao diện phải tách rõ BB84 dùng để thiết lập khóa, ChaCha20-Poly1305 dùng để bảo vệ dữ liệu, đồng thời nêu B92, E91, ML-KEM và DH/ECDH như các phương án đối sánh nếu không chọn BB84. Mỗi phiên cần có nhật ký công khai ghi công thức đã thay số, module/hàm thực thi và kết quả kiểm tra AEAD; không ghi khóa, bit thô hoặc bí mật xác thực.
 
 ## 1. Kết luận lựa chọn đề tài
 
