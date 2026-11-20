@@ -29,7 +29,14 @@ loại mẫu rồi đến QBER và khoảng Wilson. Với mặc định đã ki�
 Nhấn mạnh `continue` chỉ cho phép hậu xử lý. Chỉ khi hậu xử lý `ready` mới mã hóa.
 ID phiên, thời gian và khóa thay đổi giữa các lần chạy; khóa không hiển thị.
 
-Cuộn xuống **Nhật ký kiểm chứng thực thi**. Chỉ vào các dòng `BB84-01` đến
+Ở **Dữ liệu đến Bob**, đối chiếu số byte UTF-8, bản mã cộng tag và số byte
+khôi phục được backend xác nhận. Ví dụ nhập `Chào Bob!`: 10 byte đầu vào,
+26 byte bản mã cộng tag, 10 byte khôi phục. Kích thước này chưa tính nonce,
+AAD và thông tin đóng gói. Khi đổi đầu vào, kết quả cũ được đánh dấu cho đến
+khi bấm chạy lại; giao diện không dựng bản rõ Bob từ ô nhập Alice.
+
+Mở **Khóa đã đi qua những bước nào?** để xem năm bước hậu xử lý. Mở
+**Nhật ký kiểm chứng thực thi**. Chỉ vào các dòng `BB84-01` đến
 `AEAD-02`: tên hàm backend, phép tính sàng lọc/lấy mẫu, QBER, Wilson, ngân sách
 Toeplitz và lời gọi `cryptography...ChaCha20Poly1305.encrypt/decrypt`. Bấm **Tải
 log JSON** để lưu dấu vết công khai cùng SHA-256. Đây là bằng chứng nhánh phần mềm
@@ -65,7 +72,7 @@ Giải thích PSK xác thực độc lập với khóa đang tạo; BB84 không 
 
 ### 3:45–4:30 — AEAD, sửa bản mã và phát lại
 
-Tại **Mã hóa & xác thực thông điệp**, nhập thông điệp rồi bấm **Kiểm tra AEAD**.
+Mở **Mã hóa & xác thực thông điệp**, nhập thông điệp rồi bấm **Kiểm tra AEAD**.
 Ba kết quả cần đạt: khôi phục đúng, từ chối bản mã bị sửa, từ chối phát lại.
 Phần này dùng khóa ngẫu nhiên riêng của hệ điều hành nên chạy được ngay cả khi
 phiên BB84 vừa bị hủy. Luồng BB84 tích hợp cũng chạy ba phép kiểm tra tương tự khi
@@ -94,7 +101,7 @@ vật liệu trước hậu xử lý; Y_final là đầu ra mô hình đo đư�
 
 ### 6:15–7:00 — Tái lập và giới hạn
 
-Bấm **Tải CSV** trong **Nhật ký phiên** để cho thấy chỉ có thống kê công khai.
+Bấm **Tải CSV** trong **Các phiên vừa chạy** để cho thấy chỉ có thống kê công khai.
 Chỉ các manifest `complete` được dùng làm kết quả. Giới thiệu `tests/self_check.py`,
 `bb84_lab/research/verify_quantum.py`, `selection.json` và các seed/cấu hình đã lưu.
 

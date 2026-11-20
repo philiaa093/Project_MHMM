@@ -7,6 +7,10 @@ const history = [];
 let study = null;
 let studyLoading = false;
 let lastVerification = null;
+let resultAvailable = false;
+let sessionRunning = false;
+let configurationVersion = 0;
+const utf8 = new TextEncoder();
 const statusLabels = { continue: "Đủ điều kiện tiếp tục", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng" };
 const statusClasses = { continue: "success", anomalous: "danger", inconclusive: "warning" };
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
@@ -47,6 +51,11 @@ function setBusy(button, busy) {
   button.disabled = busy;
   button.classList.toggle("loading", busy);
   button.setAttribute("aria-busy", String(busy));
+  const label = button.querySelector(".button-label");
+  if (label) {
+    if (!button.dataset.idleLabel) button.dataset.idleLabel = label.textContent;
+    label.textContent = busy ? "Đang chạy…" : button.dataset.idleLabel;
+  }
 }
 
 function showError(selector, error) {
@@ -64,8 +73,8 @@ function setView(view, updateHash = true) {
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  text("#breadcrumb-current", { simulation: "Mô phỏng BB84", experiments: "Kết quả thí nghiệm", about: "Giới thiệu mô hình" }[view]);
-  if (updateHash) window.history.replaceState(null, "", `#${view}`);
+  document.title = `${{ simulation: "Mô phỏng", experiments: "Thí nghiệm", about: "Giới thiệu" }[view]} · BB84 Lab`;
+  if (updateHash && window.location.hash !== `#${view}`) window.history.pushState(null, "", `#${view}`);
   if (view === "experiments" && !study) loadStudy();
 }
 
@@ -73,13 +82,30 @@ function updateSliders() {
   for (const id of ["eve", "noise"]) {
     const input = $(`#${id}`);
     const ratio = (Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min));
-    input.style.background = `linear-gradient(to right, #118a8d ${ratio * 100}%, #e6edef ${ratio * 100}%)`;
+    input.style.setProperty("--range-fill", `${ratio * 100}%`);
     text(`#${id}-value`, formatPercent(Number(input.value)));
   }
-  const eve = Number($("#eve").value);
+  if (!resultAvailable && !sessionRunning) updateTopology(Number($("#eve").value), Number($("#noise").value));
+  text("#parameter-summary", `Lấy mẫu ${formatPercent(Number($("#sample").value))} · ngưỡng ${formatPercent(Number($("#threshold").value))} · seed ${$("#seed").value}`);
+}
+
+function updateTopology(eve, noise) {
   $("#eve-node").classList.toggle("intercepting", eve > 0);
   text("#eve-channel-label", eve > 0 ? `Chặn ${formatPercent(eve)} tín hiệu` : "Không can thiệp");
-  text("#noise-channel-label", `Nhiễu nền ${formatPercent(Number($("#noise").value))}`);
+  text("#noise-channel-label", `Nhiễu nền ${formatPercent(noise)}`);
+}
+
+function updateInputSize() {
+  const value = $("#session-message").value;
+  text("#input-meta", `${formatNumber(utf8.encode(value).length)} byte UTF-8 · ${formatNumber([...value].length)} ký tự`);
+}
+
+function markSessionStale() {
+  configurationVersion += 1;
+  if (resultAvailable && !sessionRunning) {
+    text("#result-context", "Đầu vào đã thay đổi. Kết quả dưới đây thuộc lần chạy trước; bấm Chạy mô phỏng để cập nhật.");
+    $("#result-context").classList.add("stale");
+  }
 }
 
 const presets = {
@@ -98,7 +124,12 @@ function choosePreset(name) {
   $("#threshold").value = "0.05";
   $("#min-samples").value = "100";
   $("#tamper-transcript").checked = false;
-  document.querySelectorAll("[data-preset]").forEach((button) => button.classList.toggle("active", button.dataset.preset === name));
+  document.querySelectorAll("[data-preset]").forEach((button) => {
+    const active = button.dataset.preset === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  markSessionStale();
   updateSliders();
 }
 
@@ -119,19 +150,18 @@ function drawQber(result) {
     return;
   }
   const max = Math.min(1, Math.max(0.1, Math.ceil(Math.max(result.ci_high, result.threshold) * 1.2 * 10) / 10));
-  const x = (value) => 14 + Math.min(max, Math.max(0, value)) / max * 536;
-  const svg = svgElement("svg", { viewBox: "0 0 564 76", role: "img", "aria-labelledby": "qber-chart-title" });
+  const x = (value) => 12 + Math.min(max, Math.max(0, value)) / max * 576;
+  const svg = svgElement("svg", { viewBox: "0 0 600 65", role: "img", "aria-labelledby": "qber-chart-title" });
   svg.append(svgElement("title", { id: "qber-chart-title" }, `QBER ${formatPercent(result.qber)}, khoảng Wilson ${formatPercent(result.ci_low)} đến ${formatPercent(result.ci_high)}, ngưỡng ${formatPercent(result.threshold)}.`));
-  svg.append(svgElement("rect", { x: 14, y: 31, width: 536, height: 7, rx: 3.5, fill: "#e9eff1" }));
-  svg.append(svgElement("rect", { x: 14, y: 31, width: x(result.threshold) - 14, height: 7, rx: 3.5, fill: "#cee6e0" }));
-  const color = { continue: "#168678", anomalous: "#bd5757", inconclusive: "#c28a35" }[result.status] || "#668a99";
-  svg.append(svgElement("line", { x1: x(result.ci_low), x2: x(result.ci_high), y1: 34.5, y2: 34.5, stroke: color, "stroke-width": 5, "stroke-linecap": "round" }));
-  svg.append(svgElement("line", { x1: x(result.threshold), x2: x(result.threshold), y1: 22, y2: 46, stroke: "#839ba6", "stroke-width": 1, "stroke-dasharray": "3 2" }));
-  svg.append(svgElement("circle", { cx: x(result.qber), cy: 34.5, r: 5, fill: color, stroke: "white", "stroke-width": 2 }));
-  svg.append(svgElement("text", { x: Math.min(515, Math.max(45, x(result.qber))), y: 14, "text-anchor": "middle", fill: color, "font-size": 10, "font-weight": 600 }, `QBER ${formatPercent(result.qber)}`));
-  svg.append(svgElement("text", { x: 14, y: 61, fill: "#95a9b2", "font-size": 9 }, "0%"));
-  svg.append(svgElement("text", { x: 550, y: 61, "text-anchor": "end", fill: "#95a9b2", "font-size": 9 }, formatPercent(max)));
-  svg.append(svgElement("text", { x: Math.min(485, Math.max(79, x(result.threshold))), y: 75, "text-anchor": "middle", fill: "#7d96a2", "font-size": 9 }, `Ngưỡng ${formatPercent(result.threshold)}`));
+  svg.append(svgElement("rect", { x: 12, y: 23, width: 576, height: 7, rx: 3.5, fill: "#e6ebf4" }));
+  svg.append(svgElement("rect", { x: 12, y: 23, width: x(result.threshold) - 12, height: 7, rx: 3.5, fill: "#d3e9df" }));
+  const color = { continue: "#14765d", anomalous: "#b53b42", inconclusive: "#925a13" }[result.status] || "#58677e";
+  svg.append(svgElement("line", { x1: x(result.ci_low), x2: x(result.ci_high), y1: 26.5, y2: 26.5, stroke: color, "stroke-width": 6, "stroke-linecap": "round" }));
+  svg.append(svgElement("line", { x1: x(result.threshold), x2: x(result.threshold), y1: 12, y2: 40, stroke: "#40577e", "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
+  svg.append(svgElement("circle", { cx: x(result.qber), cy: 26.5, r: 6, fill: color, stroke: "white", "stroke-width": 2 }));
+  svg.append(svgElement("text", { x: 12, y: 58, fill: "#58677e", "font-size": 13 }, "0%"));
+  svg.append(svgElement("text", { x: 588, y: 58, "text-anchor": "end", fill: "#58677e", "font-size": 13 }, formatPercent(max)));
+  svg.append(svgElement("text", { x: Math.min(490, Math.max(105, x(result.threshold))), y: 58, "text-anchor": "middle", fill: "#40577e", "font-size": 13 }, `Ngưỡng ${formatPercent(result.threshold)}`));
   host.append(svg);
 }
 
@@ -159,7 +189,7 @@ function renderVerification(log, emptyMessage = "Chạy một phiên để xem d
     button.disabled = true;
     return;
   }
-  const labels = { passed: "ĐÃ CHẠY", stopped: "DỪNG", failed: "LỖI", not_run: "CHƯA GỌI" };
+  const labels = { passed: "Đã chạy", stopped: "Dừng", failed: "Lỗi", not_run: "Chưa gọi" };
   for (const entry of log.entries) {
     const list = groups[entry.group];
     if (!list) continue;
@@ -174,7 +204,7 @@ function renderVerification(log, emptyMessage = "Chạy một phiên để xem d
     title.textContent = entry.title || "Bước thực thi";
     const status = document.createElement("span");
     status.className = `verification-status ${entry.status || "not_run"}`;
-    status.textContent = labels[entry.status] || "TRẠNG THÁI";
+    status.textContent = labels[entry.status] || "Trạng thái";
     const implementation = document.createElement("code");
     implementation.className = "verification-implementation";
     implementation.textContent = entry.implementation || "—";
@@ -210,6 +240,7 @@ function downloadVerification() {
 }
 
 function resetSessionAfterError() {
+  resultAvailable = false;
   metricValue("#metric-qber", "—", "%");
   metricValue("#metric-samples", "—");
   metricValue("#metric-retained", "—", "bit");
@@ -227,14 +258,23 @@ function resetSessionAfterError() {
   for (const [id, value] of [["stage-sifted", "— bit"], ["stage-retained", "— bit"], ["stage-parity", "— bit tiết lộ"], ["stage-confirmation", "Chưa thực hiện"], ["stage-output", "— bit đầu ra"]]) text(`#${id}`, value);
   document.querySelectorAll(".pipeline li").forEach((item) => item.classList.remove("done"));
   text("#integrated-status", "Phiên đã hủy. Không phát hành khóa hoặc bản rõ.");
-  text("#integrated-badge", "CHƯA MÃ HÓA");
+  text("#integrated-badge", "Phiên đã hủy");
+  $("#integrated-badge").className = "tag danger";
   $("#integrated-encryption").classList.remove("success");
+  for (const id of ["payload-input", "payload-encrypted", "payload-recovered"]) metricValue(`#${id}`, "—", "byte");
+  text("#payload-recovery-note", "Không có dữ liệu hợp lệ");
+  text("#payload-overhead", "Chưa tạo bản mã");
+  $("#security-checks").hidden = true;
+  text("#result-context", "Phiên không hoàn tất. Kiểm tra lỗi cạnh nút chạy và thử lại.");
+  $("#result-context").classList.remove("stale");
+  text("#metric-threshold", "Không có quyết định hợp lệ");
   $("#session-details").hidden = true;
-  text("#runtime-label", "PHIÊN ĐÃ HỦY");
+  text("#runtime-label", "Phiên đã hủy");
   renderVerification(null, "Phiên bị hủy trước khi backend tạo được nhật ký kiểm chứng hợp lệ.");
 }
 
-function renderSession(result) {
+function renderSession(result, inputBytes) {
+  resultAvailable = true;
   const post = result.postprocessing || {};
   const encrypted = result.encryption;
   const badge = $("#session-state");
@@ -248,6 +288,11 @@ function renderSession(result) {
   text("#metric-errors", `${formatNumber(result.sample_errors)} sai khác trong mẫu`);
   const postLabels = { ready: "Khóa mô hình đã xác nhận", skipped: "Chưa đi tiếp hậu xử lý", failed: "Hậu xử lý thất bại", insufficient_key: "Không đủ ngân sách khóa" };
   text("#metric-key-status", postLabels[post.status] || "Chưa phát hành khóa");
+  text("#metric-threshold", `Ngưỡng vận hành ${formatPercent(result.threshold)}`);
+  const runLabel = `${formatNumber(result.signals)} tín hiệu · Eve ${formatPercent(result.eve_fraction)} · nhiễu ${formatPercent(result.noise_probability)} · seed ${result.seed}`;
+  text("#result-context", runLabel);
+  $("#result-context").classList.remove("stale");
+  updateTopology(result.eve_fraction, result.noise_probability);
   text("#transcript-status", result.transcript_authenticated ? "Đã xác thực" : "Chưa xác thực");
   $("#transcript-status").classList.toggle("verified", Boolean(result.transcript_authenticated));
   drawQber(result);
@@ -267,7 +312,18 @@ function renderSession(result) {
     item.classList.toggle("done", Boolean(completed));
   });
   $("#integrated-encryption").classList.toggle("success", Boolean(encrypted?.roundtrip_ok));
-  text("#integrated-badge", encrypted?.roundtrip_ok ? "ĐÃ KIỂM CHỨNG" : "CHƯA MÃ HÓA");
+  text("#integrated-badge", encrypted?.roundtrip_ok ? "Khôi phục khớp" : "Chưa mã hóa");
+  $("#integrated-badge").className = `tag ${encrypted?.roundtrip_ok ? "success" : result.status === "anomalous" || post.status === "failed" ? "danger" : "neutral"}`;
+  metricValue("#payload-input", formatNumber(inputBytes), "byte");
+  metricValue("#payload-encrypted", encrypted ? formatNumber(encrypted.ciphertext_bytes) : "—", "byte");
+  metricValue("#payload-recovered", encrypted?.roundtrip_ok ? formatNumber(encrypted.plaintext_bytes) : "—", "byte");
+  text("#payload-overhead", encrypted ? `Gồm ${formatNumber(encrypted.tag_bytes)} byte tag` : "Chưa tạo bản mã");
+  text("#payload-recovery-note", encrypted?.roundtrip_ok ? "Backend xác nhận khớp" : "Chưa có dữ liệu nhận");
+  $("#security-checks").hidden = !encrypted;
+  for (const [id, passed, label] of [["check-roundtrip", encrypted?.roundtrip_ok, "Khôi phục đúng"], ["check-tamper", encrypted?.tamper_rejected, "Từ chối sửa gói"], ["check-replay", encrypted?.replay_rejected, "Từ chối phát lại"]]) {
+    text(`#${id}`, `${label}${passed ? "" : ": chưa đạt"}`);
+    $(`#${id}`).classList.toggle("failed", !passed);
+  }
   if (encrypted?.roundtrip_ok) {
     const checks = [encrypted.tamper_rejected ? "từ chối sửa gói" : "", encrypted.replay_rejected ? "từ chối phát lại" : ""].filter(Boolean);
     text("#integrated-status", `Khôi phục đúng ${formatNumber(encrypted.plaintext_bytes)} byte; ${checks.join("; ")}. ${encrypted.key_source || "Khóa từ mô hình BB84."}`);
@@ -276,7 +332,7 @@ function renderSession(result) {
     text("#integrated-status", reasons[post.status] || post.reason || "Chưa có khóa mô hình đủ điều kiện để mã hóa.");
   }
   const elapsed = result.timings?.total_seconds;
-  text("#runtime-label", finite(elapsed) ? `${formatNumber(elapsed * 1000)} MS` : "ĐÃ HOÀN TẤT");
+  text("#runtime-label", finite(elapsed) ? `${formatNumber(elapsed * 1000)} ms` : "Đã hoàn tất");
   $("#session-details").hidden = false;
   text("#session-details", `Phiên ${String(result.session_id || "—")} · seed ${formatNumber(result.seed)} · Ngân sách mô hình ${formatNumber(post.entropy_budget_bits)} bit${finite(post.confirmation_leak_bits) ? ` · Xác nhận tiết lộ ${formatNumber(post.confirmation_leak_bits)} bit` : ""}`);
   renderVerification(result.verification);
@@ -299,7 +355,7 @@ function addHistory(result) {
     for (const value of values) { const cell = document.createElement("td"); cell.textContent = value; tr.append(cell); }
     body.append(tr);
   });
-  text("#history-count", `${history.length} PHIÊN TRONG BỘ NHỚ`);
+  text("#history-count", `${formatNumber(history.length)} phiên trong bộ nhớ`);
   $("#download-history").disabled = false;
 }
 
@@ -322,26 +378,42 @@ function downloadHistory() {
 async function runSession(event) {
   event.preventDefault();
   const button = $("#run-session");
-  if (button.disabled || !$("#simulation-form").reportValidity()) return;
+  if (button.disabled) return;
+  const form = $("#simulation-form");
+  const invalid = form.querySelector(":invalid");
+  if (invalid?.closest("details")) invalid.closest("details").open = true;
+  if (!form.reportValidity()) return;
+  const runVersion = configurationVersion;
+  const payload = {
+    signals: Number($("#signals").value), eve_fraction: Number($("#eve").value),
+    noise_probability: Number($("#noise").value), sample_fraction: Number($("#sample").value),
+    threshold: Number($("#threshold").value), min_samples: Number($("#min-samples").value),
+    seed: Number($("#seed").value), message: $("#session-message").value,
+    tamper_transcript: $("#tamper-transcript").checked,
+  };
+  const inputBytes = utf8.encode(payload.message).length;
+  sessionRunning = true;
   setBusy(button, true);
-  $("#view-simulation").setAttribute("aria-busy", "true");
+  $("#session-results").setAttribute("aria-busy", "true");
+  text("#result-context", "Đang chạy BB84, giám sát và kiểm tra mã hóa…");
+  $("#result-context").classList.remove("stale");
   showError("#session-error", null);
   try {
-    const result = await request("/api/session", {
-      signals: Number($("#signals").value), eve_fraction: Number($("#eve").value),
-      noise_probability: Number($("#noise").value), sample_fraction: Number($("#sample").value),
-      threshold: Number($("#threshold").value), min_samples: Number($("#min-samples").value),
-      seed: Number($("#seed").value), message: $("#session-message").value,
-      tamper_transcript: $("#tamper-transcript").checked,
-    });
-    renderSession(result);
+    const result = await request("/api/session", payload);
+    renderSession(result, inputBytes);
     addHistory(result);
+    if (runVersion !== configurationVersion) {
+      text("#result-context", "Đầu vào đã đổi trong lúc chạy. Đây là kết quả của cấu hình lúc bấm chạy; chạy lại để cập nhật.");
+      $("#result-context").classList.add("stale");
+    }
   } catch (error) {
     resetSessionAfterError();
     showError("#session-error", error);
+    $("#session-error").focus({ preventScroll: true });
   } finally {
+    sessionRunning = false;
     setBusy(button, false);
-    $("#view-simulation").setAttribute("aria-busy", "false");
+    $("#session-results").setAttribute("aria-busy", "false");
   }
 }
 
@@ -382,6 +454,23 @@ function fillOptions(selector, values, formatter) {
   if (values.some((value) => String(value) === old)) select.value = old;
 }
 
+function applyStudyFilters() {
+  const params = new URLSearchParams(window.location.search);
+  for (const [selector, param] of [["#study-n", "n"], ["#study-noise", "noise"]]) {
+    const select = $(selector);
+    const value = params.get(param);
+    if (value !== null && [...select.options].some((option) => option.value === value)) select.value = value;
+  }
+}
+
+function updateStudyFilters() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("n", $("#study-n").value);
+  url.searchParams.set("noise", $("#study-noise").value);
+  window.history.replaceState(null, "", url);
+  renderStudyChart();
+}
+
 function renderStudyChart() {
   if (!study) return;
   const rows = studyRows().filter((row) => row.signals === Number($("#study-n").value) && row.noise_probability === Number($("#study-noise").value)).sort((a, b) => a.sample_fraction - b.sample_fraction || a.eve_fraction - b.eve_fraction);
@@ -404,23 +493,24 @@ function renderStudyChart() {
   for (let index = 0; index <= 4; index++) {
     const q = maxY * index / 4;
     svg.append(svgElement("line", { x1: left, x2: width - right, y1: y(q), y2: y(q), stroke: "#e6edef", "stroke-width": 1 }));
-    svg.append(svgElement("text", { x: left - 11, y: y(q) + 4, "text-anchor": "end", fill: "#8ca2ae", "font-size": 10 }, formatPercent(q)));
+    svg.append(svgElement("text", { x: left - 11, y: y(q) + 4, "text-anchor": "end", fill: "#58677e", "font-size": 13 }, formatPercent(q)));
     const f = index / 4;
-    svg.append(svgElement("text", { x: x(f), y: height - bottom + 22, "text-anchor": "middle", fill: "#8ca2ae", "font-size": 10 }, formatPercent(f)));
+    svg.append(svgElement("text", { x: x(f), y: height - bottom + 22, "text-anchor": "middle", fill: "#58677e", "font-size": 13 }, formatPercent(f)));
   }
-  svg.append(svgElement("text", { x: 10, y: 15, fill: "#6e8b98", "font-size": 10 }, "QBER"));
-  svg.append(svgElement("text", { x: width - right, y: height - bottom + 43, "text-anchor": "end", fill: "#829aa6", "font-size": 10 }, "Tỷ lệ Eve chặn"));
+  svg.append(svgElement("text", { x: 10, y: 15, fill: "#58677e", "font-size": 13 }, "QBER"));
+  svg.append(svgElement("text", { x: width - right, y: height - bottom + 43, "text-anchor": "end", fill: "#58677e", "font-size": 13 }, "Tỷ lệ Eve chặn"));
   const theoretical = [...new Map(rows.filter((row) => finite(row.expected_qber)).map((row) => [row.eve_fraction, row])).values()].sort((a, b) => a.eve_fraction - b.eve_fraction);
   if (theoretical.length) svg.append(svgElement("polyline", { points: theoretical.map((row) => `${x(row.eve_fraction)},${y(row.expected_qber)}`).join(" "), fill: "none", stroke: "#b1bdc3", "stroke-width": 2, "stroke-dasharray": "5 4" }));
   const alphas = [...new Set(validRows.map((row) => row.sample_fraction))];
-  const colors = ["#087e82", "#4c76a6", "#c18c3b"];
+  const colors = ["#3158c8", "#14765d", "#925a13"];
   alphas.forEach((alpha, index) => {
     const series = validRows.filter((row) => row.sample_fraction === alpha).sort((a, b) => a.eve_fraction - b.eve_fraction);
     const color = colors[index % colors.length];
-    svg.append(svgElement("polyline", { points: series.map((row) => `${x(row.eve_fraction)},${y(row.qber_mean)}`).join(" "), fill: "none", stroke: color, "stroke-width": 2 }));
+    const dash = ["", "8 4", "2 4"][index % 3];
+    svg.append(svgElement("polyline", { points: series.map((row) => `${x(row.eve_fraction)},${y(row.qber_mean)}`).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-dasharray": dash }));
     series.forEach((row) => { const dot = svgElement("circle", { cx: x(row.eve_fraction), cy: y(row.qber_mean), r: 4, fill: "white", stroke: color, "stroke-width": 2 }); dot.append(svgElement("title", {}, `Eve ${formatPercent(row.eve_fraction)}; mẫu ${formatPercent(alpha)}; QBER ${formatPercent(row.qber_mean)}`)); svg.append(dot); });
-    svg.append(svgElement("line", { x1: left + index * 145, x2: left + index * 145 + 18, y1: height - 8, y2: height - 8, stroke: color, "stroke-width": 3 }));
-    svg.append(svgElement("text", { x: left + index * 145 + 25, y: height - 5, fill: "#6c8996", "font-size": 10 }, `Lấy mẫu ${formatPercent(alpha)}`));
+    svg.append(svgElement("line", { x1: left + index * 165, x2: left + index * 165 + 22, y1: height - 8, y2: height - 8, stroke: color, "stroke-width": 3, "stroke-dasharray": dash }));
+    svg.append(svgElement("text", { x: left + index * 165 + 30, y: height - 4, fill: "#58677e", "font-size": 13 }, `Lấy mẫu ${formatPercent(alpha)}`));
   });
   chart.append(svg);
   rows.forEach((row) => {
@@ -472,10 +562,11 @@ function renderStudy() {
   text("#study-sessions", formatNumber(sessions));
   text("#study-alpha", formatPercent(alpha));
   text("#study-evaluation", formatNumber(manifest.evaluation_sessions ?? manifest.evaluation_independent_sessions));
-  text("#study-source-label", study.evaluation_summary?.length ? "BỘ ĐÁNH GIÁ ĐỘC LẬP" : "MA TRẬN CHÍNH");
+  text("#study-source-label", study.evaluation_summary?.length ? "Bộ đánh giá độc lập" : "Ma trận chính");
   fillOptions("#study-n", [...new Set(rows.map((row) => row.signals).filter(finite))].sort((a, b) => a - b), formatNumber);
   if ([...$("#study-n").options].some((option) => option.value === "4096")) $("#study-n").value = "4096";
   fillOptions("#study-noise", [...new Set(rows.map((row) => row.noise_probability).filter(finite))].sort((a, b) => a - b), formatPercent);
+  applyStudyFilters();
   text("#study-selection-note", selection.reason || selection.conclusion || "Tỷ lệ mẫu phải được chốt trên dữ liệu hiệu chỉnh trước khi xem dữ liệu đánh giá. Kết quả không cải thiện cũng là một kết quả hợp lệ.");
   const postManifest = study.postprocessing_manifest || {};
   const postComplete = postManifest.state === "complete";
@@ -497,6 +588,9 @@ function renderStudy() {
     if (!url) continue;
     const figure = document.createElement("figure");
     const image = document.createElement("img"); image.src = url; image.alt = item.name || "Biểu đồ thí nghiệm"; image.loading = "lazy";
+    const sizes = { "01_qber": [1920, 1280], "02_detection": [1920, 1280], "03_no_eve": [1920, 800], "04_retention": [1600, 800], "05_comparison": [1920, 1280] };
+    const stem = new URL(url).pathname.split("/").pop().replace(/\.(png|svg)$/i, "");
+    if (sizes[stem]) [image.width, image.height] = sizes[stem];
     const caption = document.createElement("figcaption"); caption.textContent = item.name || "Biểu đồ từ dữ liệu đã đo";
     figure.append(image, caption); figures.append(figure);
   }
@@ -518,27 +612,42 @@ async function checkConnection() {
   try {
     await request("/api/health");
     host.querySelector(".status-dot").className = "status-dot";
-    host.querySelector("span:last-child").textContent = "Máy chủ cục bộ sẵn sàng";
+    host.querySelector("span:last-child").textContent = "Máy chủ sẵn sàng";
   } catch {
     host.querySelector(".status-dot").className = "status-dot offline";
     host.querySelector("span:last-child").textContent = "Chưa kết nối máy chủ";
   }
 }
 
-document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+document.querySelectorAll("[data-view]").forEach((link) => link.addEventListener("click", (event) => {
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  event.preventDefault();
+  setView(link.dataset.view);
+}));
 document.querySelectorAll("[data-preset]").forEach((button) => button.addEventListener("click", () => choosePreset(button.dataset.preset)));
-for (const id of ["signals", "eve", "noise", "sample", "threshold", "min-samples"]) $(`#${id}`).addEventListener("input", () => {
-  document.querySelectorAll("[data-preset]").forEach((button) => button.classList.remove("active"));
+for (const id of ["signals", "eve", "noise", "sample", "threshold", "min-samples", "seed", "tamper-transcript"]) $(`#${id}`).addEventListener("input", () => {
+  document.querySelectorAll("[data-preset]").forEach((button) => {
+    button.classList.remove("active");
+    button.setAttribute("aria-pressed", "false");
+  });
+  markSessionStale();
   updateSliders();
 });
+$("#session-message").addEventListener("input", () => { updateInputSize(); markSessionStale(); });
+$("#simulation-form").addEventListener("invalid", (event) => {
+  const details = event.target.closest("details");
+  if (details) details.open = true;
+}, true);
 $("#simulation-form").addEventListener("submit", runSession);
 $("#aead-form").addEventListener("submit", runAead);
 $("#download-history").addEventListener("click", downloadHistory);
 $("#download-verification").addEventListener("click", downloadVerification);
 $("#refresh-study").addEventListener("click", loadStudy);
-$("#study-n").addEventListener("change", renderStudyChart);
-$("#study-noise").addEventListener("change", renderStudyChart);
+$("#study-n").addEventListener("change", updateStudyFilters);
+$("#study-noise").addEventListener("change", updateStudyFilters);
 window.addEventListener("hashchange", () => setView(window.location.hash.slice(1), false));
+window.addEventListener("popstate", () => setView(window.location.hash.slice(1), false));
+updateInputSize();
 updateSliders();
 setView(window.location.hash.slice(1) || "simulation", false);
 checkConnection();

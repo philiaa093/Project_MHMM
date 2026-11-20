@@ -3,131 +3,172 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#112d3a">
-  <title>BB84 Lab · Phòng thí nghiệm phân phối khóa</title>
+  <meta name="theme-color" content="#edf1f7">
+  <meta name="description" content="Chạy kịch bản BB84, quan sát QBER và kiểm chứng mã hóa thông điệp bằng ChaCha20-Poly1305.">
+  <title>BB84 Lab · Trao đổi khóa và mã hóa</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Đến nội dung chính</a>
-  <aside class="sidebar">
-    <a class="brand" href="#simulation" aria-label="BB84 Lab, trang mô phỏng"><span class="brand-icon" aria-hidden="true">⌘</span><span>BB84<span class="brand-light"> LAB</span><small>QUANTUM KEY RESEARCH</small></span></a>
-    <div class="sidebar-label">KHÔNG GIAN NGHIÊN CỨU</div>
-    <nav aria-label="Điều hướng chính">
-      <button class="nav-link active" data-view="simulation" aria-current="page"><span aria-hidden="true">◈</span>Mô phỏng<span class="nav-arrow" aria-hidden="true">›</span></button>
-      <button class="nav-link" data-view="experiments"><span aria-hidden="true">▥</span>Thí nghiệm</button>
-      <button class="nav-link" data-view="about"><span aria-hidden="true">ⓘ</span>Giới thiệu</button>
+  <header class="app-header">
+    <a class="brand" href="#simulation" aria-label="BB84 Lab, trang mô phỏng" translate="no">
+      <svg class="brand-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 5v30M5 20h30" stroke="currentColor" stroke-width="1.5"/><ellipse cx="20" cy="20" rx="8" ry="15" transform="rotate(45 20 20)" stroke="currentColor" stroke-width="1.5"/><circle cx="20" cy="20" r="4" fill="currentColor"/></svg>
+      <span>BB84<span class="brand-light"> Lab</span></span>
+    </a>
+    <nav class="main-nav" aria-label="Điều hướng chính">
+      <a class="nav-link active" data-view="simulation" href="#simulation" aria-current="page">Mô phỏng</a>
+      <a class="nav-link" data-view="experiments" href="#experiments">Thí nghiệm</a>
+      <a class="nav-link" data-view="about" href="#about">Giới thiệu</a>
     </nav>
-    <div class="sidebar-note"><span class="small-orbit" aria-hidden="true">↗</span><strong>Từ qubit đến thông điệp</strong><p>Quan sát tác động của can thiệp, nhiễu và cỡ mẫu trong cùng một phiên.</p><span class="tag">BB84 + ChaCha20-Poly1305</span></div>
-    <div class="sidebar-footer"><span class="status-dot" aria-hidden="true"></span>Mô phỏng cổ điển<span class="sidebar-version">v1.0</span></div>
-  </aside>
+    <div class="connection" id="connection-status" role="status"><span class="status-dot pending" aria-hidden="true"></span><span>Đang kết nối…</span></div>
+  </header>
 
-  <div class="workspace">
-    <header class="topbar"><div><span class="breadcrumb">Không gian nghiên cứu</span><span aria-hidden="true"> / </span><strong id="breadcrumb-current">Mô phỏng BB84</strong></div><div class="connection" id="connection-status" role="status"><span class="status-dot pending" aria-hidden="true"></span><span>Đang kết nối</span></div></header>
-    <main id="main-content">
-      <section id="view-simulation" class="view" aria-labelledby="page-title">
-        <div class="page-heading"><div><p class="eyebrow">CHUẨN BỊ · ĐO · KIỂM CHỨNG</p><h1 id="page-title">Phòng thí nghiệm phân phối khóa</h1><p class="page-description">Khám phá BB84, giám sát QBER và theo dõi từng bước xử lý khóa trong mô hình.</p></div><span class="outline-tag"><span aria-hidden="true">◇</span> Phiên có thể tái lập</span></div>
-        <div class="scope-banner"><span class="info-icon" aria-hidden="true">i</span><p><strong>Môi trường nghiên cứu trên máy cổ điển.</strong> Seed công khai dùng để tái lập. Kết quả không chứng nhận an toàn QKD vật lý; khoảng Wilson chỉ phục vụ giám sát.</p></div>
+  <main id="main-content" tabindex="-1">
+    <section id="view-simulation" class="view" aria-labelledby="page-title">
+      <div class="page-heading">
+        <div><h1 id="page-title">Từ trao đổi khóa đến thông điệp.</h1><p class="page-description">Chạy kịch bản, giám sát kênh truyền và kiểm chứng dữ liệu Bob nhận.</p></div>
+        <div class="protocol-caption"><span class="protocol-dot" aria-hidden="true"></span><div><strong translate="no">BB84 + ChaCha20-Poly1305</strong><span>Phân phối khóa và mã hóa có xác thực</span></div></div>
+      </div>
 
-        <div class="simulation-grid">
-          <section class="card controls-card" aria-labelledby="configuration-title">
-            <div class="card-heading"><div><span class="section-number">01</span><h2 id="configuration-title">Thiết lập phiên</h2></div><span class="mini-label">ĐẦU VÀO</span></div>
-            <form id="simulation-form">
-              <fieldset class="preset-fieldset"><legend>Kịch bản nhanh</legend><div class="presets"><button type="button" class="preset active" data-preset="clean">Kênh sạch</button><button type="button" class="preset" data-preset="eve">Eve toàn phần</button><button type="button" class="preset" data-preset="noise">Chỉ nhiễu</button><button type="button" class="preset" data-preset="weak">Can thiệp yếu</button><button type="button" class="preset" data-preset="small">Ít mẫu</button></div></fieldset>
-              <div class="form-row"><label for="signals">Số tín hiệu gửi <span>N</span></label><select id="signals" name="signals"><option value="16">16 tín hiệu · kiểm tra thiếu mẫu</option><option value="1024">1.024 tín hiệu</option><option value="4096" selected>4.096 tín hiệu</option><option value="16384">16.384 tín hiệu</option></select></div>
-              <div class="form-row range-row"><div class="label-line"><label for="eve">Tỷ lệ Eve chặn <span>f</span></label><output id="eve-value" for="eve">0%</output></div><input id="eve" name="eve_fraction" type="range" min="0" max="1" step="0.01" value="0"><div class="range-captions"><span>Không can thiệp</span><span>Toàn phần</span></div></div>
-              <div class="form-row range-row"><div class="label-line"><label for="noise">Xác suất lỗi bit nền <span>p</span></label><output id="noise-value" for="noise">0%</output></div><input id="noise" name="noise_probability" type="range" min="0" max="0.1" step="0.001" value="0"><div class="range-captions"><span>0%</span><span>10%</span></div></div>
-              <div class="two-columns"><div class="form-row"><label for="sample">Tỷ lệ lấy mẫu</label><select id="sample" name="sample_fraction"><option value="0.1">10%</option><option value="0.25" selected>25% · chuẩn B0</option><option value="0.5">50%</option></select></div><div class="form-row"><label for="seed">Seed mô phỏng</label><input id="seed" name="seed" type="number" min="0" max="2147483647" step="1" value="2026" required></div></div>
-              <details class="advanced"><summary>Tham số giám sát</summary><div class="two-columns"><div class="form-row"><label for="threshold">Ngưỡng QBER</label><select id="threshold"><option value="0.03">3%</option><option value="0.05" selected>5%</option><option value="0.08">8%</option></select></div><div class="form-row"><label for="min-samples">Mẫu tối thiểu</label><input id="min-samples" type="number" min="1" max="10000" value="100" step="1" required></div></div><label class="checkbox-label" for="tamper-transcript"><input id="tamper-transcript" type="checkbox">Thử sửa transcript công khai</label><p class="input-help">Phiên phải hủy ngay khi xác thực thất bại.</p></details>
-              <div class="form-row"><label for="session-message">Thông điệp demo</label><textarea id="session-message" rows="2" maxlength="4096">Xin chào từ BB84 Lab!</textarea><p class="input-help">Chỉ mã hóa khi hậu xử lý tạo đủ khóa mô hình.</p></div>
-              <button id="run-session" class="button primary" type="submit"><span aria-hidden="true">▶</span><span>Chạy mô phỏng</span><span class="button-shortcut" aria-hidden="true">↗</span></button>
-              <p class="form-footnote">Bit thô và khóa không hiển thị hoặc ghi nhật ký.</p>
-            </form>
+      <div class="scope-banner"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5M10 6v1" stroke="currentColor" stroke-width="1.5"/></svg><p><strong>Mô phỏng trên máy cổ điển.</strong> Seed công khai để tái lập. Khóa mô hình chỉ dùng minh họa, không bảo vệ dữ liệu thật.</p></div>
+
+      <fieldset class="scenario-picker">
+        <legend>Chọn kịch bản</legend>
+        <div class="presets">
+          <button type="button" class="preset active" data-preset="clean" aria-pressed="true"><span class="scenario-marker clean" aria-hidden="true"></span><strong>Kênh sạch</strong><span>Không Eve, không nhiễu</span></button>
+          <button type="button" class="preset" data-preset="eve" aria-pressed="false"><span class="scenario-marker eve" aria-hidden="true"></span><strong>Eve toàn phần</strong><span>Chặn 100% tín hiệu</span></button>
+          <button type="button" class="preset" data-preset="noise" aria-pressed="false"><span class="scenario-marker noise" aria-hidden="true"></span><strong>Chỉ nhiễu</strong><span>Lỗi bit nền 10%</span></button>
+          <button type="button" class="preset" data-preset="weak" aria-pressed="false"><span class="scenario-marker weak" aria-hidden="true"></span><strong>Can thiệp yếu</strong><span>Eve chặn 10% tín hiệu</span></button>
+          <button type="button" class="preset" data-preset="small" aria-pressed="false"><span class="scenario-marker small" aria-hidden="true"></span><strong>Ít mẫu</strong><span>Chỉ gửi 16 tín hiệu</span></button>
+        </div>
+      </fieldset>
+
+      <div class="simulation-grid">
+        <section class="controls-panel" aria-labelledby="configuration-title">
+          <div class="panel-heading"><h2 id="configuration-title">Alice gửi gì?</h2><span class="person-tag">Bên gửi</span></div>
+          <form id="simulation-form" autocomplete="off">
+            <div class="form-row message-row">
+              <label for="session-message">Thông điệp demo</label>
+              <textarea id="session-message" name="message" rows="3" maxlength="4096" aria-describedby="input-meta input-help">Xin chào từ BB84 Lab!</textarea>
+              <div class="input-meta" id="input-meta">Văn bản UTF-8</div>
+              <p class="input-help" id="input-help">Đếm theo byte UTF-8; ký tự tiếng Việt có thể cần nhiều byte.</p>
+            </div>
+            <button id="run-session" class="button primary" type="submit"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7 4 9 6-9 6V4Z" fill="currentColor"/></svg><span class="button-label">Chạy mô phỏng</span><span class="button-spinner" aria-hidden="true"></span></button>
+            <div id="session-error" class="error-message" role="alert" tabindex="-1" hidden></div>
+            <div class="form-divider"></div>
+            <div class="form-row"><label for="signals">Số tín hiệu lượng tử <span>N</span></label><select id="signals" name="signals"><option value="16">16 tín hiệu · thiếu mẫu</option><option value="1024">1.024 tín hiệu</option><option value="4096" selected>4.096 tín hiệu</option><option value="16384">16.384 tín hiệu</option></select></div>
+            <div class="form-row range-row"><div class="label-line"><label for="eve">Tỷ lệ Eve chặn <span>f</span></label><output id="eve-value" for="eve">0%</output></div><input id="eve" name="eve_fraction" type="range" min="0" max="1" step="0.01" value="0"><div class="range-captions"><span>Không chặn</span><span>Toàn phần</span></div></div>
+            <div class="form-row range-row"><div class="label-line"><label for="noise">Xác suất lỗi bit nền <span>p</span></label><output id="noise-value" for="noise">0%</output></div><input id="noise" name="noise_probability" type="range" min="0" max="0.1" step="0.001" value="0"><div class="range-captions"><span>0%</span><span>10%</span></div></div>
+            <details class="advanced" id="session-parameters">
+              <summary>Tham số giám sát</summary>
+              <div class="two-columns">
+                <div class="form-row"><label for="sample">Tỷ lệ lấy mẫu</label><select id="sample" name="sample_fraction"><option value="0.1">10%</option><option value="0.25" selected>25% · chuẩn B0</option><option value="0.5">50%</option></select></div>
+                <div class="form-row"><label for="seed">Seed mô phỏng</label><input id="seed" name="seed" type="number" inputmode="numeric" min="0" max="2147483647" step="1" value="2026" required></div>
+                <div class="form-row"><label for="threshold">Ngưỡng QBER</label><select id="threshold" name="threshold"><option value="0.03">3%</option><option value="0.05" selected>5%</option><option value="0.08">8%</option></select></div>
+                <div class="form-row"><label for="min-samples">Mẫu tối thiểu</label><input id="min-samples" name="min_samples" type="number" inputmode="numeric" min="1" max="10000" value="100" step="1" required></div>
+              </div>
+              <label class="checkbox-label" for="tamper-transcript"><input id="tamper-transcript" name="tamper_transcript" type="checkbox"><span>Thử sửa transcript công khai</span></label>
+              <p class="input-help">Xác thực thất bại phải hủy phiên trước khi mã hóa.</p>
+            </details>
+            <p class="parameter-summary" id="parameter-summary">Lấy mẫu 25% · ngưỡng 5% · seed 2026</p>
+            <p class="form-footnote">Chỉ mã hóa khi đã xác nhận khóa và còn đủ 256 bit cho ứng dụng.</p>
+          </form>
+        </section>
+
+        <div class="results-column" id="session-results">
+          <section class="channel-panel" aria-labelledby="channel-title">
+            <div class="panel-heading"><h2 id="channel-title">Một phiên, hai kênh truyền</h2><span class="channel-label-note">BB84 mô phỏng</span></div>
+            <div class="topology">
+              <div class="participant"><div class="participant-icon alice" aria-hidden="true">A</div><strong>Alice</strong><small>Chuẩn bị qubit</small></div>
+              <div class="quantum-link"><div class="eve-node" id="eve-node"><span class="eve-symbol" aria-hidden="true">E</span><div><strong>Eve</strong><small id="eve-channel-label">Không can thiệp</small></div></div><div class="signal-line" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="channel-label">Kênh lượng tử mô phỏng</span><span class="channel-noise" id="noise-channel-label">Nhiễu nền 0%</span></div>
+              <div class="participant"><div class="participant-icon bob" aria-hidden="true">B</div><strong>Bob</strong><small>Đo và đối chiếu</small></div>
+            </div>
+            <div class="authenticated-line"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="5" y="9" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6a3 3 0 0 1 6 0v3" stroke="currentColor" stroke-width="1.5"/></svg><span>Kênh cổ điển xác thực <span class="auth-algorithm">HMAC-SHA256</span></span><span class="line-status" id="transcript-status">Chưa có phiên</span></div>
           </section>
 
-          <div class="results-column">
-            <section class="card topology-card" aria-labelledby="channel-title"><div class="card-heading"><div><span class="section-number">02</span><h2 id="channel-title">Kênh truyền mô phỏng</h2></div><span class="tag neutral">PREPARE &amp; MEASURE</span></div>
-              <div class="topology"><div class="participant"><div class="participant-icon alice" aria-hidden="true">A</div><strong>Alice</strong><small>Chuẩn bị qubit</small></div><div class="quantum-link"><div class="eve-node" id="eve-node"><span aria-hidden="true">E</span><strong>Eve</strong><small id="eve-channel-label">Không can thiệp</small></div><div class="signal-line" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="channel-label">Kênh lượng tử mô phỏng</span><span class="channel-noise" id="noise-channel-label">Nhiễu nền 0%</span></div><div class="participant"><div class="participant-icon bob" aria-hidden="true">B</div><strong>Bob</strong><small>Đo &amp; đối chiếu</small></div></div><div class="authenticated-line"><span aria-hidden="true">⌁</span>Kênh cổ điển xác thực bằng HMAC-SHA256<span class="line-status" id="transcript-status">Chưa có phiên</span></div>
-            </section>
-
-            <section aria-labelledby="result-title"><div class="result-title-row"><h2 id="result-title">Kết quả phiên</h2><span class="result-badge neutral" id="session-state">Sẵn sàng chạy</span></div><div id="session-error" class="error-message" role="alert" hidden></div><div class="metrics" id="session-metrics" aria-live="polite" aria-atomic="true"><article class="metric"><span class="metric-label">QBER quan sát</span><strong id="metric-qber">—<small>%</small></strong><span class="metric-note" id="metric-ci">Khoảng Wilson 95%</span></article><article class="metric"><span class="metric-label">Mẫu kiểm tra</span><strong id="metric-samples">—</strong><span class="metric-note" id="metric-errors">Chưa có dữ liệu</span></article><article class="metric"><span class="metric-label">Vật liệu giữ lại</span><strong id="metric-retained">—<small>bit</small></strong><span class="metric-note">Đã loại bit mẫu công khai</span></article><article class="metric"><span class="metric-label">Đầu ra mô hình</span><strong id="metric-output">—<small>bit</small></strong><span class="metric-note" id="metric-key-status">Chưa hậu xử lý</span></article></div></section>
-
-            <section class="card monitor-card" aria-labelledby="monitor-title"><div class="card-heading"><div><span class="section-number">03</span><h2 id="monitor-title">Giám sát &amp; xử lý khóa</h2></div><span class="mini-label" id="runtime-label">CHỜ KẾT QUẢ</span></div><div class="monitor-visual" id="qber-visual"><p>Chạy một phiên để xem QBER và khoảng tin cậy so với ngưỡng vận hành.</p></div><p id="decision-explanation" class="decision-explanation">Mỗi phiên kiểm tra một lần với cỡ mẫu đã chốt. Hệ thống chỉ quyết định từ mẫu công khai được xác thực.</p><ol class="pipeline" aria-label="Các bước xử lý khóa"><li><span class="step-dot">1</span><div><strong>Sàng lọc</strong><span id="stage-sifted">— bit</span></div></li><li><span class="step-dot">2</span><div><strong>Loại mẫu</strong><span id="stage-retained">— bit</span></div></li><li><span class="step-dot">3</span><div><strong>Đối soát</strong><span id="stage-parity">— bit tiết lộ</span></div></li><li><span class="step-dot">4</span><div><strong>Xác nhận</strong><span id="stage-confirmation">Chưa thực hiện</span></div></li><li><span class="step-dot">5</span><div><strong>Toeplitz</strong><span id="stage-output">— bit đầu ra</span></div></li></ol><div class="encryption-result" id="integrated-encryption"><span class="lock-icon" aria-hidden="true">◇</span><div><strong>ChaCha20-Poly1305</strong><p id="integrated-status">Đợi phiên đủ điều kiện và đủ ngân sách khóa mô hình.</p></div><span id="integrated-badge" class="tag neutral">CHƯA MÃ HÓA</span></div><div id="session-details" class="session-details" hidden></div></section>
-          </div>
-        </div>
-
-        <section class="card verification-card" aria-labelledby="verification-title">
-          <div class="verification-heading">
-            <div><p class="eyebrow">BACKEND TRACE · KHÔNG CHỨA KHÓA</p><h2 id="verification-title">Nhật ký kiểm chứng thực thi</h2></div>
-            <button class="button secondary audit-download" id="download-verification" type="button" disabled>Tải log JSON <span aria-hidden="true">↓</span></button>
-          </div>
-          <p class="verification-intro">Mỗi dòng được tạo từ chính kết quả backend, kèm công thức thay số và hàm thực thi. Dấu vân tay SHA-256 giúp phát hiện log bị sửa; đây không phải bằng chứng có photon thật hay chứng minh an toàn QKD vật lý.</p>
-          <div id="verification-empty" class="verification-empty">Chạy một phiên để xem BB84 sàng lọc, tính QBER/Wilson, hậu xử lý và điều kiện gọi ChaCha20-Poly1305.</div>
-          <div id="verification-content" hidden aria-live="polite">
-            <div class="verification-grid">
-              <section class="verification-panel" aria-labelledby="verification-bb84-title"><h3 id="verification-bb84-title">BB84 · QBER</h3><ol id="verification-bb84" class="verification-list"></ol></section>
-              <section class="verification-panel" aria-labelledby="verification-post-title"><h3 id="verification-post-title">Hậu xử lý khóa</h3><ol id="verification-postprocess" class="verification-list"></ol></section>
-              <section class="verification-panel" aria-labelledby="verification-aead-title"><h3 id="verification-aead-title">ChaCha20-Poly1305</h3><ol id="verification-aead" class="verification-list"></ol></section>
+          <section class="monitor-panel" aria-labelledby="result-title">
+            <div class="panel-heading"><h2 id="result-title">Kết quả giám sát</h2><span class="result-badge neutral" id="session-state" role="status">Sẵn sàng chạy</span></div>
+            <p class="result-context" id="result-context" role="status">Chọn kịch bản và bấm Chạy mô phỏng để bắt đầu.</p>
+            <div class="qber-summary"><div><span class="metric-label">QBER quan sát</span><strong id="metric-qber">—<small>%</small></strong></div><div class="qber-interval"><span id="metric-ci">Khoảng Wilson 95%</span><span id="metric-threshold">Ngưỡng vận hành 5%</span></div></div>
+            <div class="monitor-visual" id="qber-visual"><div class="chart-placeholder" aria-hidden="true"><span></span><i></i></div><p>Khoảng sai số và ngưỡng sẽ hiển thị sau khi chạy.</p></div>
+            <p id="decision-explanation" class="decision-explanation">QBER dùng để đánh giá kênh có đủ điều kiện đi tiếp, không xác định chắc chắn có Eve hay không.</p>
+            <div class="metrics session-metrics" id="session-metrics">
+              <article class="metric"><span class="metric-label">Mẫu kiểm tra</span><strong id="metric-samples">—</strong><span class="metric-note" id="metric-errors">Chưa có dữ liệu</span></article>
+              <article class="metric"><span class="metric-label">Sau loại mẫu</span><strong id="metric-retained">—<small>bit</small></strong><span class="metric-note">Đã loại bit công khai</span></article>
+              <article class="metric"><span class="metric-label">Đầu ra hậu xử lý</span><strong id="metric-output">—<small>bit</small></strong><span class="metric-note" id="metric-key-status">Chưa có khóa mô hình</span></article>
             </div>
-            <div class="verification-digest"><span>Dấu vân tay log SHA-256</span><code id="verification-sha">—</code></div>
-          </div>
-        </section>
+          </section>
 
-        <section class="card crypto-stack" aria-labelledby="crypto-stack-title">
-          <div class="crypto-stack-heading">
-            <div><p class="eyebrow">VAI TRÒ THUẬT TOÁN</p><h2 id="crypto-stack-title">Từ trao đổi khóa đến dữ liệu được bảo vệ</h2></div>
-            <span class="tag">BB84 + ChaCha20-Poly1305</span>
-          </div>
-          <div class="crypto-stack-flow">
-            <article><span class="stack-step">01</span><strong>BB84</strong><small>Thiết lập vật liệu khóa</small><p>Dùng tín hiệu lượng tử mô phỏng; QBER giúp phát hiện kênh không đạt điều kiện.</p></article>
-            <span class="stack-arrow" aria-hidden="true">›</span>
-            <article><span class="stack-step">02</span><strong>Hậu xử lý</strong><small>Cascade · xác nhận · Toeplitz</small><p>Loại dữ liệu công khai, đối soát và chỉ phát hành khóa mô hình khi hai phía khớp.</p></article>
-            <span class="stack-arrow" aria-hidden="true">›</span>
-            <article><span class="stack-step">03</span><strong>ChaCha20-Poly1305</strong><small>Mã hóa và xác thực dữ liệu</small><p>Dùng khóa đã thiết lập để bảo vệ thông điệp; không phải thuật toán trao đổi khóa.</p></article>
-          </div>
-          <p class="crypto-stack-note"><strong>Nếu không dùng BB84:</strong> B92 hoặc E91 vẫn là QKD; ML-KEM là lựa chọn hậu lượng tử chạy trên phần mềm; DH/ECDH là đối sánh cổ điển nhưng không chống máy lượng tử đủ mạnh. Xem bảng ở trang Giới thiệu.</p>
-        </section>
-
-        <section class="card aead-card" aria-labelledby="aead-title"><div class="aead-description"><p class="eyebrow">THỬ NGHIỆM ĐỘC LẬP</p><h2 id="aead-title">Mã hóa &amp; xác thực thông điệp</h2><p>Kiểm chứng AEAD bằng khóa ngẫu nhiên riêng từ hệ điều hành. Có thể chạy ngay cả khi phiên BB84 không đạt điều kiện.</p><span class="tag neutral">Khóa ngẫu nhiên · độc lập với BB84</span></div><form id="aead-form" class="aead-form"><label for="aead-message">Thông điệp</label><textarea id="aead-message" rows="2" maxlength="4096">Một thông điệp cần được bảo vệ.</textarea><div class="aead-action"><button type="submit" class="button secondary" id="run-aead">Kiểm tra AEAD <span aria-hidden="true">↗</span></button><span class="input-help">Tự thử sửa bản mã và phát lại</span></div><div id="aead-result" aria-live="polite" class="aead-result"></div></form></section>
-
-        <section class="card history-card" aria-labelledby="history-title"><div class="card-heading"><div><h2 id="history-title">Nhật ký phiên</h2><span class="mini-label" id="history-count">0 PHIÊN TRONG BỘ NHỚ</span></div><button class="text-button" id="download-history" disabled>Tải CSV <span aria-hidden="true">↓</span></button></div><div class="table-scroll"><table><caption class="sr-only">10 phiên gần nhất trong trang hiện tại, chỉ thống kê công khai</caption><thead><tr><th scope="col">Phiên</th><th scope="col">N / Seed</th><th scope="col">Eve / Nhiễu</th><th scope="col">QBER</th><th scope="col">Trạng thái</th><th scope="col">Đầu ra</th></tr></thead><tbody id="history-body"><tr><td colspan="6" class="empty-cell">Chưa có phiên. Chọn một kịch bản và bắt đầu mô phỏng.</td></tr></tbody></table></div></section>
-      </section>
-
-      <section id="view-experiments" class="view" aria-labelledby="experiments-title" hidden><div class="page-heading"><div><p class="eyebrow">DỮ LIỆU · ĐỐI SÁNH · ĐỘ BẤT ĐỊNH</p><h1 id="experiments-title">Kết quả thí nghiệm</h1><p class="page-description">Quan sát từ dữ liệu đã đo, tách hiệu chỉnh và đánh giá bằng seed mới.</p></div><button class="button secondary" id="refresh-study">Làm mới dữ liệu</button></div><div id="study-error" class="error-message" role="alert" hidden></div><div id="study-empty" class="card empty-study"><span class="empty-symbol" aria-hidden="true">▥</span><h2>Chưa có bộ thí nghiệm hoàn tất</h2><p>Kết quả sẽ xuất hiện sau khi bộ chạy nghiên cứu hoàn thành. Không có số liệu minh họa được điền sẵn.</p></div><div id="study-content" hidden><div class="study-summary metrics"><article class="metric"><span class="metric-label">Phiên mô phỏng độc lập</span><strong id="study-sessions">—</strong><span class="metric-note">Không cộng lặp kết quả ghép cặp</span></article><article class="metric"><span class="metric-label">Tỷ lệ mẫu đóng băng</span><strong id="study-alpha">—</strong><span class="metric-note">Chọn trước khi đánh giá độc lập</span></article><article class="metric"><span class="metric-label">Bộ đánh giá</span><strong id="study-evaluation">—</strong><span class="metric-note">Seed khác bộ hiệu chỉnh</span></article><article class="metric"><span class="metric-label">Mốc đối sánh B0</span><strong>25<small>%</small></strong><span class="metric-note">Cùng N, f, p và luật giám sát</span></article></div><section class="card chart-card"><div class="card-heading"><div><h2>QBER theo mức can thiệp</h2><span class="mini-label" id="study-source-label">DỮ LIỆU ĐÃ ĐO</span></div><div class="chart-filters"><label for="study-n">N<select id="study-n"></select></label><label for="study-noise">Nhiễu<select id="study-noise"></select></label></div></div><div id="study-chart" class="study-chart"></div><p class="chart-caption">Đường nét đứt: kỳ vọng của mô hình. Điểm và đường liền: QBER trung bình đo được. Khoảng Wilson của tỷ lệ bất thường có trong bảng.</p></section><section class="card"><div class="card-heading"><div><h2>Thống kê theo cấu hình</h2><span class="mini-label">KHÔNG GỘP CAN THIỆP YẾU VỚI MẠNH</span></div></div><div class="table-scroll"><table><caption class="sr-only">Các kết quả theo bộ lọc N và nhiễu</caption><thead><tr><th scope="col">Eve</th><th scope="col">Lấy mẫu</th><th scope="col">Số phiên</th><th scope="col">QBER TB</th><th scope="col">Bất thường · CI 95%</th><th scope="col">Chưa đủ bằng chứng</th><th scope="col">Y_pre TB</th></tr></thead><tbody id="study-table"></tbody></table></div></section><section class="card" aria-labelledby="paired-title"><div class="card-heading"><div><h2 id="paired-title">Chênh lệch ghép cặp so với B0</h2><span class="mini-label">Y_PRE · CÙNG PHIÊN · CÙNG MỨC NHIỄU ĐÃ CHỌN</span></div></div><p class="paired-explanation">Hiệu số số bit tiền xử lý của từng phương án trừ B0 (25%). CI bootstrap 95% mô tả trung bình; phân bố thể hiện qua trung vị và khoảng nhỏ nhất–lớn nhất. Y_pre tăng chưa chứng minh khóa cuối tăng hoặc đạt đủ tiêu chí lựa chọn.</p><div class="table-scroll"><table><caption class="sr-only">Phân bố chênh lệch Y_pre theo cặp phiên, N=4.096</caption><thead><tr><th scope="col">Eve</th><th scope="col">Lấy mẫu</th><th scope="col">Số cặp</th><th scope="col">TB · CI 95% (bit)</th><th scope="col">Trung vị</th><th scope="col">Nhỏ nhất → lớn nhất</th><th scope="col">Nhận định trong mô hình</th></tr></thead><tbody id="paired-table"></tbody></table></div></section><section class="card postprocessing-study" id="study-postprocessing" aria-labelledby="post-study-title" hidden><div class="card-heading"><div><h2 id="post-study-title">Hậu xử lý đã đo</h2><span class="mini-label">CASCADE · XÁC NHẬN · TOEPLITZ</span></div></div><div class="metrics"><article class="metric"><span class="metric-label">Phiên đã xử lý</span><strong id="study-post-rows">—</strong><span class="metric-note">Không thêm phiên mô phỏng độc lập</span></article><article class="metric"><span class="metric-label">Đủ khóa mô hình</span><strong id="study-post-ready">—</strong><span class="metric-note">Đã xác nhận và đủ ngân sách đầu ra</span></article><article class="metric"><span class="metric-label">Thất bại · đã hủy</span><strong id="study-post-failed">—</strong><span class="metric-note">Không phát hành khóa khi xác nhận lỗi</span></article></div><p class="paired-explanation">Y_final được đo sau đối soát, xác nhận và rút ngắn theo ngân sách entropy đã công bố của mô hình giáo dục. Cascade hữu hạn vòng có thể chưa sửa hết lỗi; xác nhận thất bại phải hủy phiên. Các giá trị này không phải bảo đảm QKD vật lý hoặc composable.</p></section><section class="card study-downloads"><h2>Dữ liệu &amp; biểu đồ</h2><p class="input-help" id="study-selection-note"></p><div class="download-links" id="study-downloads"></div><div id="study-figures" class="study-figures"></div></section></div></section>
-
-      <section id="view-about" class="view" aria-labelledby="about-title" hidden>
-        <div class="page-heading"><div><p class="eyebrow">NGUYÊN LÝ · PHẠM VI · GIỚI HẠN</p><h1 id="about-title">Hiểu đúng mô hình</h1><p class="page-description">Một phòng thí nghiệm phần mềm cho việc học và đánh giá giám sát QBER.</p></div></div>
-        <div class="about-grid">
-          <article class="card about-card"><span class="section-number">01</span><h2>BB84 chuẩn bị và đo</h2><p>Alice và Bob chọn cơ sở Z/X độc lập. Các vị trí có cùng cơ sở được sàng lọc; mẫu công khai được loại khỏi vật liệu giữ lại của cả hai phía.</p><p>Eve chặn–đo–gửi lại toàn phần tạo QBER kỳ vọng 25% khi không có nhiễu. Với lỗi bit nền độc lập: <code>q = p + f/4 − pf/2</code>. Các trường hợp chuẩn bị/đo một qubit được đối chiếu bằng Qiskit/Aer trong bộ kiểm chứng.</p></article>
-          <article class="card about-card"><span class="section-number">02</span><h2>Giám sát không xác định nguyên nhân</h2><p>Khoảng Wilson 95% so với ngưỡng vận hành cho ba trạng thái: tiếp tục, bất thường hoặc chưa đủ bằng chứng. QBER cao có thể do Eve, nhiễu hoặc cả hai.</p><p>Can thiệp yếu có thể không bị phát hiện. Một kết quả QBER thấp không chứng minh phiên an toàn.</p></article>
-          <article class="card about-card"><span class="section-number">03</span><h2>Hậu xử lý ở mức giáo dục</h2><p>Đã triển khai đối soát Cascade bằng parity, xác nhận khóa và rút ngắn bằng Toeplitz, có theo dõi dữ liệu tiết lộ và ngân sách đầu ra. Nếu xác nhận thất bại hoặc thiếu ngân sách, phiên bị hủy. Không sao chép bit Alice sang Bob hoặc băm chuỗi ngắn để tạo thêm entropy.</p><p>Đầu ra là khóa của mô hình, chưa phải chứng nhận an toàn QKD composable hay phân tích finite-key đầy đủ.</p></article>
-          <article class="card about-card"><span class="section-number">04</span><h2>AEAD và vòng đời khóa</h2><p>ChaCha20-Poly1305 do thư viện <code>cryptography</code> thực hiện. Nonce 96 bit không lặp với cùng khóa; AAD ràng buộc phiên, vai trò và số thứ tự. Phía nhận từ chối phát lại.</p><p>Seed nghiên cứu là công khai. Không dùng khóa từ mô phỏng để bảo vệ dữ liệu thật. Demo AEAD riêng dùng khóa ngẫu nhiên từ hệ điều hành.</p></article>
+          <section class="transfer-panel" aria-labelledby="transfer-title">
+            <div class="panel-heading"><h2 id="transfer-title">Dữ liệu đến Bob</h2><span id="integrated-badge" class="tag neutral">Chưa mã hóa</span></div>
+            <div class="transfer-stages" aria-live="polite" aria-atomic="true">
+              <div class="transfer-stage"><span>Alice gửi</span><strong id="payload-input">—<small>byte</small></strong><small>Văn bản UTF-8</small></div>
+              <div class="transfer-stage"><span>Bản mã + tag</span><strong id="payload-encrypted">—<small>byte</small></strong><small id="payload-overhead">Tag Poly1305: 16 byte</small></div>
+              <div class="transfer-stage"><span>Bob khôi phục</span><strong id="payload-recovered">—<small>byte</small></strong><small id="payload-recovery-note">Đợi khóa mô hình</small></div>
+            </div>
+            <div class="encryption-result" id="integrated-encryption"><span class="encryption-indicator" aria-hidden="true"></span><div><strong translate="no">ChaCha20-Poly1305</strong><p id="integrated-status">Chưa gửi thông điệp. Chạy một phiên để kiểm tra luồng dữ liệu.</p></div></div>
+            <div class="security-checks" id="security-checks" hidden><span id="check-roundtrip">Khôi phục đúng</span><span id="check-tamper">Từ chối sửa gói</span><span id="check-replay">Từ chối phát lại</span></div>
+            <p class="packet-note">Kích thước bản mã + tag chưa gồm nonce, AAD và thông tin đóng gói.</p>
+          </section>
         </div>
+      </div>
 
-        <section class="card alternatives-card" aria-labelledby="alternatives-title">
-          <div class="card-heading"><div><span class="section-number">05</span><h2 id="alternatives-title">Nếu không dùng BB84 thì dùng gì?</h2></div><span class="mini-label">CHỌN THEO MỤC TIÊU</span></div>
-          <p class="alternatives-intro">Các lựa chọn dưới đây thay phần <strong>thiết lập hoặc phân phối khóa</strong>. ChaCha20-Poly1305 vẫn nằm ở lớp mã hóa dữ liệu sau khi đã có khóa.</p>
-          <p class="table-hint">Vuốt ngang để xem đầy đủ bốn cột dữ liệu.</p>
-          <div class="table-scroll">
-            <table class="alternatives-table">
-              <caption class="sr-only">So sánh BB84 với các phương án thiết lập hoặc phân phối khóa khác</caption>
-              <thead><tr><th scope="col">Phương án</th><th scope="col">Nhóm</th><th scope="col">Dữ liệu nên hiển thị</th><th scope="col">Vai trò trong đề tài</th></tr></thead>
-              <tbody>
-                <tr><th scope="row"><strong>BB84</strong><span class="choice-status current">ĐANG DÙNG</span></th><td>QKD chuẩn bị–đo</td><td>QBER, khoảng Wilson, số bit qua từng bước</td><td>Mô phỏng và thí nghiệm chính</td></tr>
-                <tr><th scope="row"><strong>B92</strong><span class="choice-status">QKD</span></th><td>Hai trạng thái không trực giao</td><td>Lỗi, tỷ lệ kết quả có kết luận, tổn hao</td><td>Ít trạng thái chuẩn bị hơn; cần mô hình đo riêng</td></tr>
-                <tr><th scope="row"><strong>E91</strong><span class="choice-status">QKD</span></th><td>QKD dựa trên vướng víu</td><td>CHSH, tương quan đo, QBER và độ bất định</td><td>Mở rộng nếu có nguồn vướng víu hoặc mô phỏng Bell</td></tr>
-                <tr><th scope="row"><strong>ML-KEM</strong><span class="choice-status software">PQC</span></th><td>Thiết lập khóa hậu lượng tử</td><td>Thời gian, kích thước khóa/bản mã, trạng thái đóng/mở gói khóa</td><td>Chọn khi cần giải pháp phần mềm thực tế, không có kênh lượng tử</td></tr>
-                <tr><th scope="row"><strong>Diffie–Hellman</strong><span class="choice-status classical">DH/ECDH</span></th><td>Thỏa thuận khóa cổ điển</td><td>Thời gian, kích thước khóa công khai, trạng thái phiên</td><td>Chỉ dùng đối sánh; Shor đe dọa khi có máy lượng tử đủ mạnh</td></tr>
-              </tbody>
-            </table>
+      <section class="diagnostics" aria-label="Chi tiết phiên và kiểm chứng">
+        <details class="detail-block" id="postprocessing-details">
+          <summary><span><strong>Khóa đã đi qua những bước nào?</strong><small>Sàng lọc, đối soát, xác nhận và Toeplitz</small></span><span class="detail-state" id="runtime-label">Chưa chạy</span></summary>
+          <div class="detail-body"><ol class="pipeline" aria-label="Các bước xử lý khóa"><li><span class="step-dot">1</span><div><strong>Sàng lọc</strong><span id="stage-sifted">— bit</span></div></li><li><span class="step-dot">2</span><div><strong>Loại mẫu</strong><span id="stage-retained">— bit</span></div></li><li><span class="step-dot">3</span><div><strong>Đối soát</strong><span id="stage-parity">Chưa thực hiện</span></div></li><li><span class="step-dot">4</span><div><strong>Xác nhận</strong><span id="stage-confirmation">Chưa thực hiện</span></div></li><li><span class="step-dot">5</span><div><strong>Toeplitz</strong><span id="stage-output">— bit đầu ra</span></div></li></ol><div id="session-details" class="session-details" hidden></div></div>
+        </details>
+
+        <details class="detail-block verification-card" id="verification-details">
+          <summary><span><strong id="verification-title">Nhật ký kiểm chứng thực thi</strong><small>Công thức, số liệu và hàm backend thực sự đã chạy</small></span></summary>
+          <div class="detail-body">
+            <div class="verification-heading"><p class="verification-intro">Log chỉ chứa dữ liệu công khai. SHA-256 giúp đối chiếu nội dung, không chứng nhận QKD vật lý hay xác thực nguồn log.</p><button class="button secondary" id="download-verification" type="button" disabled>Tải log JSON</button></div>
+            <div id="verification-empty" class="verification-empty">Chưa có nhật ký. Chạy một phiên rồi mở lại mục này.</div>
+            <div id="verification-content" hidden><div class="verification-grid"><section class="verification-panel" aria-labelledby="verification-bb84-title"><h3 id="verification-bb84-title">BB84 và QBER</h3><ol id="verification-bb84" class="verification-list"></ol></section><section class="verification-panel" aria-labelledby="verification-post-title"><h3 id="verification-post-title">Hậu xử lý khóa</h3><ol id="verification-postprocess" class="verification-list"></ol></section><section class="verification-panel" aria-labelledby="verification-aead-title"><h3 id="verification-aead-title">ChaCha20-Poly1305</h3><ol id="verification-aead" class="verification-list"></ol></section></div><div class="verification-digest"><span>SHA-256 của log</span><code id="verification-sha">—</code></div></div>
           </div>
-          <p class="alternatives-decision"><strong>Quyết định phạm vi:</strong> giữ BB84 để nghiên cứu QBER; chỉ so sánh B92/E91/ML-KEM/DH/ECDH về nguyên lý. Không trộn số liệu của các mô hình chưa được triển khai.</p>
-        </section>
+        </details>
 
-        <div class="scope-banner about-footer"><span class="info-icon" aria-hidden="true">i</span><p>Không có photon thật, thiết bị quang học hoặc truyền thông lượng tử vật lý. Mọi kết luận chỉ áp dụng cho mô hình và các cấu hình đã kiểm tra.</p></div>
+        <details class="detail-block" id="aead-details">
+          <summary><span><strong id="aead-title">Mã hóa &amp; xác thực thông điệp</strong><small>Thử AEAD độc lập bằng khóa ngẫu nhiên của hệ điều hành</small></span></summary>
+          <div class="detail-body aead-layout"><p class="input-help">Phép thử này dùng khóa riêng, chạy được khi BB84 bị hủy. Khóa ở đây không đến từ phiên BB84 phía trên.</p><form id="aead-form" autocomplete="off"><label for="aead-message">Thông điệp</label><textarea id="aead-message" name="message" rows="2" maxlength="4096">Một thông điệp cần được bảo vệ.</textarea><button type="submit" class="button secondary" id="run-aead"><span class="button-label">Kiểm tra AEAD</span><span class="button-spinner" aria-hidden="true"></span></button><div id="aead-result" aria-live="polite" class="aead-result"></div></form></div>
+        </details>
       </section>
-      <footer class="page-footer"><span>BB84 LAB <span aria-hidden="true">/</span> Mô phỏng nghiên cứu</span><span>Không hiển thị khóa hoặc bit thô</span></footer>
-    </main>
-  </div>
+
+      <section class="history-card" aria-labelledby="history-title">
+        <div class="panel-heading"><div><h2 id="history-title">Các phiên vừa chạy</h2><p id="history-count" class="section-note">Chưa có phiên trong bộ nhớ</p></div><button class="button secondary" id="download-history" disabled>Tải CSV</button></div>
+        <div class="table-scroll" role="region" aria-label="Lịch sử 10 phiên, có thể cuộn ngang" tabindex="0"><table><caption class="sr-only">10 phiên gần nhất trong trang hiện tại, chỉ thống kê công khai</caption><thead><tr><th scope="col">Phiên</th><th scope="col">N / Seed</th><th scope="col">Eve / Nhiễu</th><th scope="col">QBER</th><th scope="col">Giám sát</th><th scope="col">Đầu ra</th></tr></thead><tbody id="history-body"><tr><td colspan="6" class="empty-cell">Chưa có phiên. Chọn kịch bản đầu tiên để bắt đầu.</td></tr></tbody></table></div>
+        <p class="history-note">Lưu tối đa 10 phiên trong trang hiện tại. CSV chỉ chứa thống kê công khai.</p>
+      </section>
+    </section>
+
+    <section id="view-experiments" class="view" aria-labelledby="experiments-title" hidden>
+      <div class="page-heading"><div><h1 id="experiments-title">Đọc kết quả.<br>Đối chiếu giả thuyết.</h1><p class="page-description">Dữ liệu đã đo, seed độc lập và độ bất định theo từng cấu hình.</p></div><button class="button secondary" id="refresh-study"><span class="button-label">Làm mới dữ liệu</span><span class="button-spinner" aria-hidden="true"></span></button></div>
+      <div id="study-error" class="error-message" role="alert" hidden></div>
+      <div id="study-empty" class="card empty-study"><h2>Chưa có bộ thí nghiệm hoàn tất</h2><p>Chạy study theo README rồi bấm Làm mới dữ liệu. Kết quả chỉ hiển thị khi manifest ghi nhận đã hoàn tất.</p></div>
+      <div id="study-content" hidden>
+        <div class="study-summary metrics"><article class="metric"><span class="metric-label">Phiên độc lập</span><strong id="study-sessions">—</strong><span class="metric-note">Không cộng lặp kết quả ghép cặp</span></article><article class="metric"><span class="metric-label">Mẫu đóng băng</span><strong id="study-alpha">—</strong><span class="metric-note">Chọn trước khi đánh giá độc lập</span></article><article class="metric"><span class="metric-label">Phiên đánh giá</span><strong id="study-evaluation">—</strong><span class="metric-note">Seed khác bộ hiệu chỉnh</span></article><article class="metric"><span class="metric-label">Mốc đối sánh B0</span><strong>25<small>%</small></strong><span class="metric-note">Cùng N, f, p và luật giám sát</span></article></div>
+        <section class="card chart-card"><div class="card-heading"><div><h2>QBER theo mức can thiệp</h2><span class="mini-label" id="study-source-label">Dữ liệu đã đo</span></div><div class="chart-filters"><div><label for="study-n">Số tín hiệu N</label><select id="study-n" name="study_signals" autocomplete="off"></select></div><div><label for="study-noise">Nhiễu nền</label><select id="study-noise" name="study_noise" autocomplete="off"></select></div></div></div><div id="study-chart" class="study-chart" role="region" aria-label="Biểu đồ QBER, có thể cuộn ngang" tabindex="0"></div><p class="chart-caption">Đường nét đứt xám: kỳ vọng mô hình. Các đường màu: QBER trung bình đo được theo tỷ lệ mẫu. Bảng dưới có số phiên và khoảng tin cậy.</p></section>
+        <section class="card"><div class="card-heading"><div><h2>Thống kê theo cấu hình</h2><p class="section-note">Tách riêng can thiệp yếu và mạnh.</p></div></div><div class="table-scroll" role="region" aria-label="Thống kê theo cấu hình, có thể cuộn ngang" tabindex="0"><table><caption class="sr-only">Kết quả theo bộ lọc N và nhiễu</caption><thead><tr><th scope="col">Eve</th><th scope="col">Lấy mẫu</th><th scope="col">Số phiên</th><th scope="col">QBER TB</th><th scope="col">Bất thường · CI 95%</th><th scope="col">Chưa đủ bằng chứng</th><th scope="col">Y_pre TB</th></tr></thead><tbody id="study-table"></tbody></table></div></section>
+        <section class="card" aria-labelledby="paired-title"><div class="card-heading"><h2 id="paired-title">Chênh lệch ghép cặp so với B0</h2></div><p class="paired-explanation">Hiệu số Y_pre của từng phương án trừ B0 (25%) trên cùng phiên và mức nhiễu. CI bootstrap 95% mô tả trung bình; trung vị và khoảng nhỏ nhất–lớn nhất mô tả phân bố. Y_pre tăng chưa chứng minh khóa cuối tăng.</p><div class="table-scroll" role="region" aria-label="Đối sánh ghép cặp, có thể cuộn ngang" tabindex="0"><table><caption class="sr-only">Phân bố chênh lệch Y_pre theo cặp phiên, N=4.096</caption><thead><tr><th scope="col">Eve</th><th scope="col">Lấy mẫu</th><th scope="col">Số cặp</th><th scope="col">TB · CI 95% (bit)</th><th scope="col">Trung vị</th><th scope="col">Nhỏ nhất → lớn nhất</th><th scope="col">Nhận định</th></tr></thead><tbody id="paired-table"></tbody></table></div></section>
+        <section class="card postprocessing-study" id="study-postprocessing" aria-labelledby="post-study-title" hidden><div class="card-heading"><h2 id="post-study-title">Hậu xử lý đã đo</h2></div><div class="metrics"><article class="metric"><span class="metric-label">Phiên đã xử lý</span><strong id="study-post-rows">—</strong><span class="metric-note">Không thêm phiên độc lập</span></article><article class="metric"><span class="metric-label">Đủ khóa mô hình</span><strong id="study-post-ready">—</strong><span class="metric-note">Đã xác nhận và đủ ngân sách</span></article><article class="metric"><span class="metric-label">Thất bại, đã hủy</span><strong id="study-post-failed">—</strong><span class="metric-note">Không phát hành khóa khi lỗi</span></article></div><p class="paired-explanation">Y_final đo sau đối soát, xác nhận và rút ngắn theo ngân sách entropy giáo dục. Cascade hữu hạn vòng có thể không sửa hết lỗi; xác nhận thất bại phải hủy. Đây không phải bảo đảm QKD vật lý hoặc composable.</p></section>
+        <section class="card study-downloads"><div class="card-heading"><h2>Dữ liệu và biểu đồ</h2></div><p class="input-help" id="study-selection-note"></p><div class="download-links" id="study-downloads"></div><div id="study-figures" class="study-figures"></div></section>
+      </div>
+    </section>
+
+    <section id="view-about" class="view" aria-labelledby="about-title" hidden>
+      <div class="page-heading"><div><h1 id="about-title">Hiểu đúng<br>từng lớp bảo vệ.</h1><p class="page-description">BB84 tạo vật liệu khóa. Hậu xử lý xác nhận và rút ngắn.<br class="desktop-break"> ChaCha20-Poly1305 mã hóa thông điệp.</p></div><span class="person-tag">Phạm vi mô hình</span></div>
+      <section class="card crypto-stack" aria-labelledby="crypto-stack-title"><div class="card-heading"><h2 id="crypto-stack-title">Từ trao đổi khóa đến dữ liệu được bảo vệ</h2></div><div class="crypto-stack-flow"><article><span class="stack-step">01</span><h3>BB84</h3><p>Alice chuẩn bị, Bob đo. Công khai cơ sở để sàng lọc và lấy mẫu giám sát QBER.</p></article><article><span class="stack-step">02</span><h3>Hậu xử lý</h3><p>Đối soát Cascade, xác nhận và Toeplitz. Chỉ dùng khóa khi hai phía khớp và đủ ngân sách.</p></article><article><span class="stack-step">03</span><h3>ChaCha20-Poly1305</h3><p>Mã hóa và xác thực dữ liệu bằng khóa đã thiết lập. Không phải thuật toán trao đổi khóa.</p></article></div></section>
+      <div class="about-grid">
+        <article class="about-card"><h2>BB84 chuẩn bị và đo</h2><p>Alice và Bob chọn cơ sở Z/X độc lập. Giữ vị trí cùng cơ sở; loại mẫu công khai khỏi vật liệu khóa của cả hai phía.</p><p>Eve chặn–đo–gửi lại toàn phần tạo QBER kỳ vọng 25% khi không nhiễu. Mô hình lỗi nền độc lập có <code>q = p + f/4 − pf/2</code>. Mạch một qubit đã được đối chiếu Qiskit/Aer.</p></article>
+        <article class="about-card"><h2>QBER không xác định nguyên nhân</h2><p>So khoảng Wilson 95% với ngưỡng vận hành để quyết định tiếp tục, bất thường hoặc chưa đủ bằng chứng.</p><p>QBER cao có thể do Eve, nhiễu hoặc cả hai. Can thiệp yếu có thể không bị phát hiện. QBER thấp không chứng minh phiên an toàn.</p></article>
+        <article class="about-card"><h2>Khóa của mô hình</h2><p>Cascade sửa Bob qua parity, không sao chép bit Alice. Mọi bit tiết lộ được tính vào ngân sách trước khi rút ngắn bằng Toeplitz.</p><p>Xác nhận thất bại hoặc thiếu ngân sách phải hủy phiên. Wilson và ngân sách entropy giáo dục chưa phải chứng minh an toàn finite-key/composable.</p></article>
+        <article class="about-card"><h2>AEAD và vòng đời khóa</h2><p>Dùng ChaCha20Poly1305 của thư viện <code>cryptography</code>. Nonce 96 bit không lặp với cùng khóa; AAD ràng buộc phiên, vai trò và số thứ tự. Phía nhận từ chối phát lại.</p><p>HKDF sau Toeplitz ràng buộc khóa với phiên, không tạo thêm entropy bí mật. Khóa không lưu qua khởi động lại.</p></article>
+      </div>
+      <section class="card alternatives-card" aria-labelledby="alternatives-title"><div class="card-heading"><h2 id="alternatives-title">Nếu không dùng BB84 thì dùng gì?</h2></div><p class="alternatives-intro">Các phương án thay phần thiết lập hoặc phân phối khóa. ChaCha20-Poly1305 vẫn nằm ở lớp mã hóa dữ liệu.</p><div class="table-scroll" role="region" aria-label="Các phương án thay BB84, có thể cuộn ngang" tabindex="0"><table class="alternatives-table"><caption class="sr-only">So sánh các phương án thiết lập hoặc phân phối khóa</caption><thead><tr><th scope="col">Phương án</th><th scope="col">Nhóm</th><th scope="col">Dữ liệu cần theo dõi</th><th scope="col">Vai trò trong đề tài</th></tr></thead><tbody><tr><th scope="row">BB84 <span class="choice-status current">Đang dùng</span></th><td>QKD chuẩn bị–đo</td><td>QBER, Wilson, số bit qua các bước</td><td>Mô phỏng và thí nghiệm chính</td></tr><tr><th scope="row">B92</th><td>Hai trạng thái không trực giao</td><td>Lỗi, kết quả có kết luận, tổn hao</td><td>So sánh lý thuyết; cần mô hình đo riêng</td></tr><tr><th scope="row">E91</th><td>QKD dựa trên vướng víu</td><td>CHSH, tương quan đo, QBER, độ bất định</td><td>Mở rộng bằng nguồn vướng víu hoặc mô phỏng Bell</td></tr><tr><th scope="row">ML-KEM</th><td>Thiết lập khóa hậu lượng tử</td><td>Thời gian, kích thước khóa và bản mã KEM</td><td>Giải pháp phần mềm, không cần kênh lượng tử</td></tr><tr><th scope="row">Diffie–Hellman</th><td>Thỏa thuận khóa cổ điển</td><td>Thời gian, khóa công khai, trạng thái phiên</td><td>Đối sánh; không chống máy lượng tử đủ mạnh</td></tr></tbody></table></div><p class="alternatives-decision">Chương trình hiện chỉ triển khai BB84. Số liệu B92, E91, ML-KEM và DH/ECDH chưa được đo trong ứng dụng.</p></section>
+      <div class="scope-banner about-footer"><p>Không có photon thật hay thiết bị quang học. Kết quả chỉ áp dụng cho mô hình và các cấu hình đã kiểm tra.</p></div>
+    </section>
+    <footer class="page-footer"><span translate="no">BB84 Lab</span><span>Mô phỏng cổ điển · Không hiển thị bit thô hoặc khóa</span></footer>
+  </main>
 </body>
 </html>
