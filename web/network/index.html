@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Truyền qua mạng · BB84 Lab</title>
+  <link rel="stylesheet" href="/shared/styles.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Đến nội dung</a>
+  <header class="app-header">
+    <a class="brand" href="/">BB84 <span class="brand-light">Lab</span></a>
+    <span class="network-heading">Truyền qua mạng</span>
+    <span id="connection" class="connection" role="status">Đang kết nối giao diện…</span>
+  </header>
+  <main id="main" tabindex="-1">
+    <div class="page-heading">
+      <div><h1 id="role-title">Hai đầu nhận gửi. Một kênh quan sát.</h1>
+      <p class="page-description" id="role-description">Văn bản, hình ảnh, âm thanh và video qua phiên BB84 mô phỏng.</p></div>
+      <span id="role-badge" class="person-tag">Đang tải</span>
+    </div>
+    <p class="scope-banner">Mô phỏng cổ điển qua mạng. Tín hiệu lượng tử là dữ liệu phần mềm có thể sao chép; chỉ dùng nội dung thử nghiệm.</p>
+    <section class="network-route" aria-label="Đường truyền">
+      <div data-role="alice"><span class="route-person">Alice</span><span>Chuẩn bị &amp; gửi</span></div>
+      <span class="route-line" aria-hidden="true">→</span>
+      <div data-role="eve"><span class="route-person">Eve / đường truyền</span><span>Chuyển tiếp &amp; can thiệp</span></div>
+      <span class="route-line" aria-hidden="true">→</span>
+      <div data-role="bob"><span class="route-person">Bob</span><span>Đo, xác thực &amp; nhận</span></div>
+    </section>
+    <div class="network-grid">
+      <section class="controls-panel network-controls" aria-labelledby="actions-title">
+        <h2 id="actions-title">Thao tác trên máy này</h2>
+        <p class="input-help" id="address-note"></p>
+        <div id="alice-controls" hidden>
+          <form id="text-form">
+            <div class="form-row"><label for="message">Văn bản gửi Bob</label>
+              <textarea id="message" rows="5" placeholder="Nhập thông điệp thử nghiệm…" maxlength="16384">Xin chào Bob! Đây là thông điệp từ Alice.</textarea>
+              <p id="text-size" class="input-help"></p>
+            </div>
+            <button class="network-button send-button" type="submit">Gửi văn bản</button>
+          </form>
+          <div class="form-divider"></div>
+          <form id="file-form">
+            <label for="file">Hoặc chọn tệp</label>
+            <input type="file" id="file">
+            <p class="input-help">Ảnh, video, âm thanh, PDF hoặc tệp bất kỳ. Mỗi lần gửi tạo phiên và khóa mới.</p>
+            <p class="input-help" id="file-limit"></p>
+            <button class="network-button send-button" type="submit">Gửi tệp</button>
+          </form>
+          <p class="input-help">Ảnh/video được gửi dưới dạng tệp, chưa có gọi hoặc phát trực tiếp.</p>
+        </div>
+        <div id="bob-controls" hidden>
+          <p class="receiver-note">Đang chờ Alice gửi.</p>
+          <p class="input-help">Tệp chỉ xuất hiện trong hộp nhận khi xác thực từng khối, kích thước và SHA-256 đều đạt. Phiên lỗi sẽ hủy tệp tạm.</p>
+          <p class="input-help">Có thể tải về hoặc xem trước định dạng ảnh, âm thanh và video mà trình duyệt hỗ trợ.</p>
+        </div>
+        <form id="eve-controls" hidden>
+          <div class="form-row"><label for="attack-mode">Can thiệp phiên tiếp theo</label>
+            <select id="attack-mode">
+              <option value="pass">Chỉ chuyển tiếp</option>
+              <option value="intercept">Chặn–đo–gửi lại</option>
+              <option value="tamper">Sửa một bit bản mã</option>
+              <option value="replay">Phát lại một gói</option>
+              <option value="drop">Ngắt truyền</option>
+              <option value="tamper-public">Sửa thảo luận công khai</option>
+            </select>
+          </div>
+          <div class="form-row"><label for="eve-fraction">Tỷ lệ tín hiệu chặn–đo–gửi lại</label>
+            <input id="eve-fraction" type="number" min="0" max="1" step="0.1" value="1">
+            <p class="input-help">Từ 0 đến 1; chỉ áp dụng khi chọn chặn–đo–gửi lại. Toàn phần có QBER kỳ vọng 25% khi không nhiễu.</p>
+          </div>
+          <button id="apply-attack" class="network-button" type="submit">Áp dụng chế độ</button>
+          <p class="input-help" id="active-mode"></p>
+          <p class="input-help">Eve không được cấp PSK. QBER thấp có thể bỏ sót can thiệp yếu; không chứng minh vắng Eve.</p>
+        </form>
+        <p id="form-status" class="form-status" role="status" aria-live="polite"></p>
+      </section>
+      <div class="network-results">
+        <section class="network-panel" aria-labelledby="session-title">
+          <div class="card-heading"><h2 id="session-title">Phiên đang quan sát</h2><span id="state" class="network-state">Chờ kết nối</span></div>
+          <p id="session-note" class="input-help">Kết quả xuất hiện khi hai bên thực hiện giao thức.</p>
+          <dl class="network-metrics">
+            <div><dt>QBER mẫu</dt><dd id="qber">—</dd></div>
+            <div><dt>Wilson 95%</dt><dd id="wilson">—</dd></div>
+            <div><dt>Bit mẫu đã loại</dt><dd id="sample-count">—</dd></div>
+            <div><dt>Bit giữ lại</dt><dd id="retained">—</dd></div>
+            <div><dt>Đầu ra Toeplitz</dt><dd id="output-bits">—</dd></div>
+            <div><dt>Quyết định QBER</dt><dd id="decision">—</dd></div>
+          </dl>
+          <label for="transfer-progress">Dữ liệu qua kênh mã hóa</label>
+          <progress id="transfer-progress" max="1" value="0"></progress>
+          <p id="progress-caption" class="input-help">Chưa truyền dữ liệu</p>
+        </section>
+        <section id="inbox-section" class="network-panel" hidden aria-labelledby="inbox-title">
+          <h2 id="inbox-title">Bob đã nhận</h2>
+          <p id="inbox-empty" class="empty-inbox">Chưa có tệp hoàn tất trong lần chạy này.</p>
+          <div id="inbox"></div>
+        </section>
+        <section class="network-panel" aria-labelledby="events-title">
+          <h2 id="events-title">Nhật ký phiên</h2>
+          <p class="input-help">Chỉ hiển thị trạng thái và thống kê công khai. Khóa và chuỗi bit không được ghi nhật ký.</p>
+          <ol id="events" class="network-events"><li>Đang chờ sự kiện đầu tiên.</li></ol>
+        </section>
+      </div>
+    </div>
+    <footer class="network-footer">Mỗi vai trò chạy độc lập. Các máy khác mạng dùng địa chỉ VPN; giao diện điều khiển chỉ mở trên máy này. Alice → Bob là một chiều.</footer>
+  </main>
+</body>
+</html>

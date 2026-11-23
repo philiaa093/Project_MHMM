@@ -5,7 +5,7 @@ import itertools
 import random
 import statistics
 
-from bb84_lab.bb84 import expected_qber, wilson_interval
+from bb84_lab.core.bb84 import expected_qber, wilson_interval
 
 EVE_FRACTIONS = (0, .1, .25, .5, 1)
 COMPARISON_NOISE = (0, .01, .03)

@@ -1,1 +1,1 @@
-"""BB84 simulation, postprocessing and local demonstration."""
+"""BB84 Lab: core algorithms, simulation, local/network interfaces and research."""

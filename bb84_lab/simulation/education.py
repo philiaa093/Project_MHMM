@@ -8,8 +8,8 @@ import secrets
 from threading import Lock
 import time
 
-from bb84_lab.bb84 import Config, evaluate, simulate
-from bb84_lab.secure_channel import AuthenticationError, ReplayError
+from bb84_lab.core.bb84 import Config, evaluate, simulate
+from bb84_lab.core.secure_channel import AuthenticationError, ReplayError
 
 
 LESSON_SCENARIOS = {"clean": (0, 0), "eve": (1, 0), "noise": (0, .1), "weak": (.1, 0)}

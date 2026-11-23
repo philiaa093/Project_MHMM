@@ -8,7 +8,7 @@ import math
 import random
 import secrets
 
-from bb84_lab.secure_channel import AuthenticationError
+from bb84_lab.core.secure_channel import AuthenticationError
 
 
 CONFIRMATION_BITS = 257
@@ -68,21 +68,15 @@ def reconcile(alice_bits, bob_bits, qber, exchange, seed=None, passes=4):
         raise ValueError("Invalid QBER estimate")
     if type(passes) is not int or not 1 <= passes <= 8:
         raise ValueError("Invalid pass count")
-    length = len(alice_bits)
-    corrected = list(bob_bits)
     seed = secrets.randbits(128) if seed is None else seed
     if type(seed) is not int or seed < 0:
         raise ValueError("Invalid public permutation seed")
     received = exchange("alice", {"kind": "cascade-config-v1", "seed": seed, "passes": passes})
     if received != {"kind": "cascade-config-v1", "seed": seed, "passes": passes}:
         raise AuthenticationError("Cascade configuration differs")
-    rng = random.Random(seed)
-    block_size = min(length, 128 if qber == 0 else max(1, math.floor(.73 / qber)))
-    blocks = []
-    memberships = [[] for _ in range(length)]
-    leakage = corrections = queries = 0
+    leakage = queries = 0
 
-    def odd(indices):
+    def parity(indices, corrected):
         nonlocal leakage, queries
         query = queries
         queries += 1
@@ -98,6 +92,28 @@ def reconcile(alice_bits, bob_bits, qber, exchange, seed=None, passes=4):
             raise AuthenticationError("Parity transcript differs")
         leakage += 2  # Both parties disclose a parity, including repeated queries.
         return received_a["parity"] != received_b["parity"]
+
+    corrected, corrections = cascade_correct(bob_bits, qber, parity, seed, passes)
+    return corrected, leakage, corrections
+
+
+def cascade_correct(bob_bits, qber, parity, seed, passes=4):
+    """Cascade core: parity(indices, local_bits) compares with local or remote Alice."""
+    pack_bits(bob_bits)
+    if not bob_bits or type(qber) not in (int, float) or not math.isfinite(qber) or not 0 <= qber <= .5:
+        raise ValueError("Invalid Cascade input")
+    if type(seed) is not int or seed < 0 or type(passes) is not int or not 1 <= passes <= 8:
+        raise ValueError("Invalid Cascade configuration")
+    length = len(bob_bits)
+    corrected = list(bob_bits)
+    corrections = 0
+    rng = random.Random(seed)
+    block_size = min(length, 128 if qber == 0 else max(1, math.floor(.73 / qber)))
+    blocks = []
+    memberships = [[] for _ in range(length)]
+
+    def odd(indices):
+        return parity(indices, corrected)
 
     for pass_index in range(passes):
         permutation = list(range(length))
@@ -133,7 +149,7 @@ def reconcile(alice_bits, bob_bits, qber, exchange, seed=None, passes=4):
                 if affected != block_id and affected not in queued:
                     pending.append(affected)
                     queued.add(affected)
-    return tuple(corrected), leakage, corrections
+    return tuple(corrected), corrections
 
 
 @dataclass(frozen=True)

@@ -1,22 +1,18 @@
-"""Giao diện BB84 local: python -m bb84_lab.app --open (chỉ lắng nghe 127.0.0.1)."""
+"""Simulation dashboard HTTP endpoints and study resources on loopback."""
 
-import argparse
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 import json
 from pathlib import Path
 import re
-import sys
-from urllib.parse import quote, unquote, urlsplit
-import webbrowser
+from urllib.parse import quote
 
-from bb84_lab.bb84 import Config
-from bb84_lab.education import PacketInspector, lesson_session
-from bb84_lab.secure_channel import AuthenticationError
+from bb84_lab.core.bb84 import Config
+from bb84_lab.core.secure_channel import AuthenticationError
+from bb84_lab.shared.http import LoopbackHandler, validate_message
+from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
+from bb84_lab.simulation.education import PacketInspector, lesson_session
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MAX_BODY_BYTES = 262144
-MAX_MESSAGE_BYTES = 16384
 CONFIG_FIELDS = set(Config.__dataclass_fields__)
 RESULT_FILES = {
     "main.csv", "calibration.csv", "evaluation.csv", "paired_differences.csv",
@@ -32,25 +28,6 @@ CONTENT_TYPES = {
 }
 
 
-def _object_without_duplicates(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("JSON không được lặp tên trường")
-        result[key] = value
-    return result
-
-
-def _reject_constant(value):
-    raise ValueError("JSON không chấp nhận NaN hoặc Infinity")
-
-
-def _message(value):
-    if type(value) is not str or len(value.encode("utf-8")) > MAX_MESSAGE_BYTES:
-        raise ValueError("Thông điệp phải là văn bản UTF-8 không quá 16.384 byte")
-    return value
-
-
 def _result_path(study_dir, relative):
     if relative not in RESULT_FILES and not re.fullmatch(r"figures/[A-Za-z0-9_-]+\.(png|svg)", relative):
         return None
@@ -60,94 +37,19 @@ def _result_path(study_dir, relative):
     return candidate
 
 
-class DemoHandler(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
+class DemoHandler(LoopbackHandler):
     server_version = "BB84Local/1"
-    sys_version = ""
-
-    def setup(self):
-        super().setup()
-        self.connection.settimeout(10)
-
-    def log_message(self, format, *args):
-        # No request bodies, messages, transcript material or keys in server logs.
-        return
-
-    def _send(self, status, body, content_type="application/json; charset=utf-8", filename=None):
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "same-origin")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; "
-                         "style-src 'self'; img-src 'self' data:; connect-src 'self'; "
-                         "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
-        self.send_header("Connection", "close")
-        if filename:
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-        self.end_headers()
-        self.close_connection = True
-        try:
-            self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-
-    def _json(self, status, value):
-        self._send(status, json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
-
-    def _error(self, status, message, code="invalid_request"):
-        self._json(status, {"error": message, "code": code})
-
-    def _local_request(self):
-        port = self.server.server_address[1]
-        hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
-        host_values = self.headers.get_all("Host", [])
-        origins = self.headers.get_all("Origin", [])
-        if len(host_values) != 1 or host_values[0] not in hosts:
-            self._error(403, "Chỉ chấp nhận địa chỉ local của ứng dụng", "forbidden_host")
-            return False
-        if origins and (len(origins) != 1 or origins[0] not in {f"http://{host}" for host in hosts}):
-            self._error(403, "Nguồn yêu cầu không hợp lệ", "forbidden_origin")
-            return False
-        return True
-
-    def _path(self):
-        parsed = urlsplit(self.path)
-        if parsed.scheme or parsed.netloc:
-            raise ValueError("Đường dẫn không hợp lệ")
-        return unquote(parsed.path, errors="strict")
-
-    def _read_json(self):
-        lengths = self.headers.get_all("Content-Length", [])
-        if self.headers.get("Transfer-Encoding") is not None:
-            raise ValueError("Không hỗ trợ Transfer-Encoding")
-        if len(lengths) != 1 or not re.fullmatch(r"[0-9]+", lengths[0]):
-            raise ValueError("Yêu cầu Content-Length hợp lệ")
-        length = int(lengths[0])
-        if not 1 <= length <= MAX_BODY_BYTES:
-            raise ValueError("Kích thước yêu cầu phải từ 1 đến 262.144 byte")
-        content_types = self.headers.get_all("Content-Type", [])
-        if len(content_types) != 1 or content_types[0].split(";", 1)[0].strip().lower() != "application/json":
-            raise ValueError("Yêu cầu Content-Type application/json")
-        raw = self.rfile.read(length)
-        if len(raw) != length:
-            raise ValueError("Nội dung yêu cầu chưa đầy đủ")
-        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_object_without_duplicates,
-                             parse_constant=_reject_constant)
-        if type(payload) is not dict:
-            raise ValueError("Nội dung phải là một đối tượng JSON")
-        return payload
 
     def do_GET(self):
         if not self._local_request():
             return
         try:
             path = self._path()
-            static = {"/": "index.html", "/index.html": "index.html",
-                      "/styles.css": "styles.css", "/app.js": "app.js", "/education.js": "education.js"}
+            static = {"/": "simulation/index.html", "/index.html": "simulation/index.html",
+                      "/shared/styles.css": "shared/styles.css",
+                      "/app.js": "simulation/app.js", "/education.js": "simulation/education.js"}
             if path in static:
-                file = ROOT / "web" / static[path]
+                file = WEB_ROOT / static[path]
                 if not file.is_file():
                     self._error(404, "Giao diện chưa sẵn sàng", "not_found")
                     return
@@ -216,7 +118,7 @@ class DemoHandler(BaseHTTPRequestHandler):
                 if set(payload) - {"scenario", "seed"}:
                     raise ValueError("Unsupported lesson fields")
                 result = lesson_session(payload.get("scenario", "clean"), payload.get("seed", 2026))
-                check_path = ROOT / "outputs" / "quantum_check.json"
+                check_path = OUTPUT_ROOT / "quantum_check.json"
                 result["circuit_check"] = None
                 if check_path.is_file():
                     try:
@@ -236,11 +138,11 @@ class DemoHandler(BaseHTTPRequestHandler):
                     raise ValueError("Unsupported packet action fields")
                 self._json(200, self.server.packet_inspector.act(payload["token"], payload["action"]))
                 return
-            message = _message(payload.get("message", "Xin chào từ BB84 Lab"))
+            message = validate_message(payload.get("message", "Xin chào từ BB84 Lab"))
             if path == "/api/aead":
                 if set(payload) - {"message"}:
                     raise ValueError("Thông số demo AEAD không hợp lệ")
-                from bb84_lab.demo import aead_demo
+                from bb84_lab.simulation.session import aead_demo
                 result = aead_demo(message)
             else:
                 if set(payload) - CONFIG_FIELDS - {"message", "tamper_transcript"}:
@@ -252,12 +154,12 @@ class DemoHandler(BaseHTTPRequestHandler):
                 if config.signals > 65536 or config.min_samples > 65536 or config.seed > 2**63 - 1:
                     raise ValueError("Giới hạn: signals/min_samples ≤ 65.536; seed ≤ 2^63−1")
                 if path == "/api/packet":
-                    from bb84_lab.demo import prepare_packet_session
+                    from bb84_lab.simulation.session import prepare_packet_session
                     result, channel = prepare_packet_session(config, tamper=tamper)
                     if channel is not None:
                         result["packet"] = self.server.packet_inspector.create(channel, message)
                 else:
-                    from bb84_lab.demo import integrated_session
+                    from bb84_lab.simulation.session import integrated_session
                     result = integrated_session(config, tamper=tamper, message=message)
             self._json(200, result)
         except AuthenticationError:
@@ -274,7 +176,7 @@ class DemoHandler(BaseHTTPRequestHandler):
             self._error(500, "Không hoàn thành được phiên mô phỏng", "simulation_error")
 
 
-def make_server(port=8765, study_dir=ROOT / "outputs" / "study"):
+def make_server(port=8765, study_dir=OUTPUT_ROOT / "study"):
     if type(port) is not int or not 0 <= port <= 65535:
         raise ValueError("port phải là số nguyên từ 0 đến 65.535")
     server = ThreadingHTTPServer(("127.0.0.1", port), DemoHandler)
@@ -282,31 +184,3 @@ def make_server(port=8765, study_dir=ROOT / "outputs" / "study"):
     server.study_dir = Path(study_dir).resolve()
     server.packet_inspector = PacketInspector()
     return server
-
-
-def main():
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--study-dir", type=Path, default=ROOT / "outputs" / "study")
-    parser.add_argument("--open", action="store_true", help="Mở trình duyệt mặc định")
-    args = parser.parse_args()
-    try:
-        server = make_server(args.port, args.study_dir)
-    except (ValueError, OSError) as error:
-        parser.exit(2, f"Không khởi động được giao diện: {error}\n")
-    url = f"http://127.0.0.1:{server.server_address[1]}"
-    print(f"BB84 Lab: {url}\nMô phỏng cổ điển; nhấn Ctrl+C để dừng.", flush=True)
-    if args.open:
-        webbrowser.open(url)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
-
-
-if __name__ == "__main__":
-    main()

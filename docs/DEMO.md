@@ -3,14 +3,16 @@
 ## Chuẩn bị
 
 ```powershell
-cd E:\Project_MHMM
+# Chạy tại gốc checkout sau khi cài đặt theo README
 .\.venv\Scripts\python.exe -m tests.self_check
-.\.venv\Scripts\python.exe -m bb84_lab.app --open
+.\.venv\Scripts\python.exe -m bb84_lab.local --open
 ```
 
 Mở `http://127.0.0.1:8765`. Giữ seed **2026**, tỷ lệ mẫu **25%**, ngưỡng **5%**,
-mẫu tối thiểu **100**. Bộ `outputs/study/` đã có kết quả; trang **Thí nghiệm** đọc
-bộ này, không tự chạy 3.300 phiên khi bấm xem. Muốn tái tạo, dùng lệnh trong README.
+mẫu tối thiểu **100**. Trang **Thí nghiệm** đọc bộ hoàn tất trong `outputs/study/`,
+không tự chạy 3.300 phiên khi bấm xem. Clone mới không kèm dữ liệu này.
+Muốn tái tạo, dùng lệnh trong [README tiếng Việt](../README.vi.md) hoặc
+[tài liệu nghiên cứu](RESEARCH.md); dùng `--study-dir` để chọn bộ khác.
 
 Thông điệp mở đầu: “Đây là mô phỏng cổ điển để học BB84 và đo giám sát QBER.
 Seed nghiên cứu là công khai; khóa mô hình không bảo vệ dữ liệu thật.”
@@ -157,14 +159,14 @@ Chỉ dùng thông điệp thử nghiệm công khai; bản rõ/bản mã không
 ## Phương án CLI nếu cần trình bày qua terminal
 
 ```powershell
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84 --eve 1
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84 --noise 0.1
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84 --eve 0.1
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84 --signals 16
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84 --signals 1024
-.\.venv\Scripts\python.exe -m bb84_lab.demo bb84 --tamper-transcript
-.\.venv\Scripts\python.exe -m bb84_lab.demo aead --message "Xin chào"
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84 --eve 1
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84 --noise 0.1
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84 --eve 0.1
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84 --signals 16
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84 --signals 1024
+.\.venv\Scripts\python.exe -m bb84_lab.simulation bb84 --tamper-transcript
+.\.venv\Scripts\python.exe -m bb84_lab.simulation aead --message "Xin chào"
 ```
 
 Lệnh sửa transcript dự kiến thoát với mã **2**. Phiên bị giám sát hủy hoặc thiếu

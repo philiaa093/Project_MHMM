@@ -13,12 +13,13 @@ import statistics
 import sys
 import time
 
-from bb84_lab.bb84 import Config, evaluate, expected_qber, monitor, simulate, wilson_interval
+from bb84_lab.core.bb84 import Config, evaluate, expected_qber, monitor, simulate, wilson_interval
 # Re-export the existing analysis symbols for callers of study/experiments.
-from bb84_lab.research_analysis import (
+from bb84_lab.research.analysis import (
     BASELINE, COMPARISON_NOISE, CRITERIA, EVE_FRACTIONS, SAMPLE_FRACTIONS,
     _quantile, assess_candidates, paired_differences, select_fraction, summarize,
 )
+from bb84_lab.shared.paths import CONFIG_ROOT
 
 SIGNALS = (1024, 4096, 16384)
 NOISE_PROBABILITIES = (0, .01, .03, .05)
@@ -61,7 +62,7 @@ def _row(transmission, config, session_id, repeat, dataset, calibration=False):
 
 
 def run_study(output, quick=False, plots=True, config_path=None):
-    config = load_study_config(config_path or Path(__file__).resolve().parents[2] / "configs" / "study.json")
+    config = load_study_config(config_path or CONFIG_ROOT / "study.json")
     if type(quick) is not bool or type(plots) is not bool:
         raise ValueError("quick và plots phải là bool")
     if quick:
@@ -195,7 +196,7 @@ def check_research():
 
 def append_postprocessing(output):
     """Measure Y_final on existing sessions without changing the frozen selection."""
-    from bb84_lab.demo import integrated_session
+    from bb84_lab.simulation.session import integrated_session
 
     output = Path(output)
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))

@@ -11,8 +11,9 @@ import platform
 import sys
 import time
 
-from bb84_lab.bb84 import Config, evaluate, expected_qber, simulate
-from bb84_lab.research_analysis import summarize as summarize
+from bb84_lab.core.bb84 import Config, evaluate, expected_qber, simulate
+from bb84_lab.research.analysis import summarize as summarize
+from bb84_lab.shared.paths import CONFIG_ROOT
 
 
 def load_config(path):
@@ -93,7 +94,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=Path(__file__).resolve().parents[2] / "configs" / "smoke.json")
+    parser.add_argument("--config", type=Path, default=CONFIG_ROOT / "smoke.json")
     parser.add_argument("--output", type=Path, required=True, help="Thư mục mới, không ghi đè dữ liệu cũ")
     args = parser.parse_args()
     try:

@@ -50,7 +50,7 @@ Nhật ký kiểm chứng (mở rộng) / kiểm tra AEAD độc lập / lịch 
 
 ## Kiểm chứng lần đổi bố cục ban đầu
 
-- `python -m tests.self_check`: PASS; `node --check web/app.js`: PASS.
+- `python -m tests.self_check`: PASS; `node --check web/simulation/app.js`: PASS.
 - Chrome headless: năm kịch bản, lỗi transcript, mất kết nối, thay đổi đầu
   vào trong lúc chờ, văn bản tiếng Việt 8.192 byte và chuỗi rỗng đều đạt.
 - Các nút tải JSON/CSV hoạt động; dữ liệu tải không chứa thông điệp người dùng.

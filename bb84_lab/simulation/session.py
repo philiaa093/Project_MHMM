@@ -1,19 +1,17 @@
-"""CLI BB84, hậu xử lý giáo dục và ChaCha20-Poly1305."""
+"""In-process educational sessions and public execution verification."""
 
-import argparse
 from dataclasses import asdict, replace
 import hashlib
 import json
 import math
 import secrets
-import sys
 import time
 
-from bb84_lab.bb84 import Config, evaluate, expected_qber, monitor, simulate
-from bb84_lab.secure_channel import (
+from bb84_lab.core.bb84 import Config, evaluate, expected_qber, monitor, simulate
+from bb84_lab.core.secure_channel import (
     AuthenticatedTranscript, AuthenticationError, DemoChannel, ReplayError,
 )
-from bb84_lab.postprocess import postprocess
+from bb84_lab.core.postprocess import postprocess
 
 
 def public_decision(alice, bob, config):
@@ -151,7 +149,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     entries = [
         entry(
             "BB84-01", "bb84", "Chuẩn bị và đo", "passed",
-            "bb84_lab.bb84.simulate",
+            "bb84_lab.core.bb84.simulate",
             "Alice chọn bit/cơ sở Z-X; Bob chọn cơ sở Z-X; Eve tùy chọn chặn-đo-gửi lại.",
             f"N={config.signals}; seed={config.seed}; f={config.eve_fraction}; "
             f"p={config.noise_probability}; QBER kỳ vọng mô hình={expected_qber(config.eve_fraction, config.noise_probability):.8f}.",
@@ -161,7 +159,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
         ),
         entry(
             "BB84-02", "bb84", "Sàng lọc và lấy mẫu", "passed",
-            "bb84_lab.bb84.evaluate",
+            "bb84_lab.core.bb84.evaluate",
             "n_sample = floor(alpha * n_sift); n_retained = n_sift - n_sample",
             f"n_sift={decision['sifted_count']}; floor({config.sample_fraction} × "
             f"{decision['sifted_count']})={sample_count}; n_retained={decision['remaining_count']}.",
@@ -172,7 +170,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     if qber is None:
         entries.append(entry(
             "BB84-03", "bb84", "QBER và Wilson 95%", "stopped",
-            "bb84_lab.bb84.monitor / wilson_interval",
+            "bb84_lab.core.bb84.monitor / wilson_interval",
             "q_hat = errors / n_sample; Wilson chỉ tính khi n_sample > 0",
             "Không có mẫu công khai nên QBER và khoảng Wilson không xác định.",
             {"sample_errors": sample_errors, "sample_count": sample_count,
@@ -181,7 +179,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     else:
         entries.append(entry(
             "BB84-03", "bb84", "QBER và Wilson 95%", "passed",
-            "bb84_lab.bb84.monitor / wilson_interval",
+            "bb84_lab.core.bb84.monitor / wilson_interval",
             "q_hat = errors / n_sample; Wilson 95% dùng z = 1.959963984540054",
             f"{sample_errors} / {sample_count} = {qber:.8f}; "
             f"CI95=[{ci_low:.8f}, {ci_high:.8f}].",
@@ -197,7 +195,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     entries.append(entry(
         "BB84-04", "bb84", "Quyết định giám sát",
         "passed" if decision["status"] == "continue" else "stopped",
-        "bb84_lab.bb84.monitor",
+        "bb84_lab.core.bb84.monitor",
         "continue nếu cận trên <= ngưỡng; anomalous nếu cận dưới > ngưỡng; còn lại inconclusive",
         f"{rules[decision['status']]}; threshold={config.threshold}; "
         f"status={decision['status']}; reason={decision['reason']}.",
@@ -209,7 +207,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     entries.append(entry(
         "POST-01", "postprocess", "Đối soát và xác nhận",
         "passed" if processed.key_match else "failed" if processed.status == "failed" else "stopped",
-        "bb84_lab.postprocess.reconcile / postprocess",
+        "bb84_lab.core.postprocess.reconcile / postprocess",
         "Cascade sửa Bob qua truy vấn parity; SHA-256 xác nhận hai chuỗi trước khi phát hành khóa.",
         (f"retained={processed.retained_bits}; corrected={processed.corrected_errors}; "
          f"parity_leak={processed.parity_leak_bits}; confirmation_leak={processed.confirmation_leak_bits}; "
@@ -223,7 +221,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     entries.append(entry(
         "POST-02", "postprocess", "Ngân sách và Toeplitz",
         "passed" if processed.status == "ready" else "stopped",
-        "bb84_lab.postprocess.key_budget / toeplitz_bits",
+        "bb84_lab.core.postprocess.key_budget / toeplitz_bits",
         "entropy=floor(n_retained*(1-h2(ci_high))); output=floor8(max(0, entropy-leak_parity-leak_confirm-64))",
         f"entropy={processed.entropy_budget_bits}; output={processed.output_bits}; "
         f"cần >=256 bit; status={processed.status}; reason={processed.reason}.",
@@ -263,7 +261,7 @@ def _verification_log(session_id, config, decision, processed, encryption):
     else:
         entries.append(entry(
             "AEAD-00", "aead", "ChaCha20-Poly1305 chưa chạy", "not_run",
-            "bb84_lab.demo.integrated_session",
+            "bb84_lab.simulation.session.integrated_session",
             "Chỉ gọi ChaCha20Poly1305 khi postprocessing.status == 'ready'.",
             f"postprocessing.status={processed.status}; không tạo bản mã.",
             {"postprocessing_status": processed.status, "encryption": None},
@@ -326,41 +324,3 @@ def integrated_session(config, tamper=False, message="Xin chào từ BB84"):
         "scope": "Mô phỏng cổ điển; seed công khai. Khóa mô phỏng không bảo vệ dữ liệu thật. "
                  "Ngân sách entropy giáo dục và Wilson không phải chứng minh an toàn finite-key.",
     }
-
-
-def main():
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description=__doc__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    bb84 = subparsers.add_parser("bb84", help="Mô phỏng, giám sát và hậu xử lý giáo dục")
-    bb84.add_argument("--signals", type=int, default=4096)
-    bb84.add_argument("--eve", type=float, default=0.0)
-    bb84.add_argument("--noise", type=float, default=0.0)
-    bb84.add_argument("--sample", type=float, default=0.25)
-    bb84.add_argument("--threshold", type=float, default=0.05)
-    bb84.add_argument("--min-samples", type=int, default=100)
-    bb84.add_argument("--seed", type=int, default=2026)
-    bb84.add_argument("--tamper-transcript", action="store_true")
-    bb84.add_argument("--monitor-only", action="store_true", help="Chỉ giám sát, bỏ hậu xử lý")
-    bb84.add_argument("--message", default="Xin chào từ BB84")
-    aead = subparsers.add_parser("aead", help="Demo riêng bằng khóa ngẫu nhiên, không dùng khóa BB84")
-    aead.add_argument("--message", default="Xin chào từ mô phỏng BB84")
-    args = parser.parse_args()
-    try:
-        if args.command == "bb84":
-            config = Config(args.signals, args.eve, args.noise, args.sample,
-                            args.threshold, args.min_samples, args.seed)
-            result = (authenticated_session(config, args.tamper_transcript) if args.monitor_only
-                      else integrated_session(config, args.tamper_transcript, args.message))
-        else:
-            result = aead_demo(args.message)
-    except AuthenticationError as error:
-        parser.exit(2, f"Hủy phiên: {error}. Không phát hành khóa hoặc bản rõ.\n")
-    except ValueError as error:
-        parser.exit(2, f"Lỗi tham số: {error}\n")
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    main()

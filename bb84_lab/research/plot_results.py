@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-from bb84_lab.bb84 import expected_qber
+from bb84_lab.core.bb84 import expected_qber
 
 
 def plot_study(directory):

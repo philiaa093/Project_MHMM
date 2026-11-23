@@ -134,8 +134,9 @@ class Packet:
 class DemoChannel:
     """One-way AEAD with OS randomness or matching postprocessed model keys."""
 
-    # ponytail: single-process, sequential demo only; use a reviewed transport
-    # protocol before adding bidirectional traffic, threads, or persisted keys.
+    # One-way educational channel. The network runner serializes access to each
+    # fresh endpoint instance; do not share it between concurrent transfers or
+    # persist/recreate a session key with its counters reset.
     def __init__(self):
         self._session_id = secrets.token_hex(16)
         self._cipher = ChaCha20Poly1305(ChaCha20Poly1305.generate_key())
@@ -169,6 +170,26 @@ class DemoChannel:
         channel._cipher = ChaCha20Poly1305(derive(alice_key))
         channel._receiver_cipher = ChaCha20Poly1305(derive(bob_key))
         channel._key_source = "BB84 mô phỏng + Cascade + Toeplitz; không bảo vệ dữ liệu thật"
+        return channel
+
+    @classmethod
+    def from_local_model_key(cls, key, session_id):
+        """One endpoint's confirmed key; network orchestration owns serialization.
+
+        The network protocol confirms the retained strings before applying the
+        same authenticated Toeplitz seed. Never transport the key to its peer.
+        Each instance is used in exactly one direction under a per-session lock.
+        """
+        if type(key) is not bytes or len(key) != 32:
+            raise ValueError("Confirmed local model key must contain 32 bytes")
+        _session_id(session_id)
+        channel = cls()
+        channel._session_id = session_id
+        derived = HKDF(algorithm=hashes.SHA256(), length=32,
+                       salt=hashlib.sha256(session_id.encode("utf-8")).digest(),
+                       info=b"bb84-network-model/aead/v1").derive(key)
+        channel._cipher = channel._receiver_cipher = ChaCha20Poly1305(derived)
+        channel._key_source = "BB84 mạng mô phỏng + Cascade + Toeplitz; chỉ dùng demo"
         return channel
 
     @staticmethod
