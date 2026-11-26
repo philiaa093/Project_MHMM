@@ -1,13 +1,15 @@
 # Demo truyền dữ liệu giữa hai máy
 
-Chạy Alice và Bob trên hai máy cùng LAN hoặc VPN. Để minh họa can thiệp vào
-đường truyền, chạy Eve ngay trên máy Alice hoặc trên máy/VM riêng.
+Chạy Alice và Bob trên hai máy cùng LAN hoặc VPN. Chọn **BB84** hoặc **E91**
+trong **Giao thức tạo khóa** trên cả hai máy. Có thể chạy Eve ngay trên máy Alice
+hoặc trên máy/VM riêng để minh họa tác động lên mô hình đường truyền.
 
 ## 1. Kiến trúc
 
 Backend trong `bb84_lab/network/` gồm `setup.py` để khởi động vai trò từ
-trình duyệt, `session.py` cho BB84, `transfer.py` cho tệp, `transport.py` cho
-TCP và `proxy.py` cho Eve. Giao diện nằm trong `web/network/`.
+trình duyệt, `session.py` cho BB84 và hậu xử lý chung, `e91_session.py` cho
+E91, `transfer.py` cho tệp, `transport.py` cho TCP và `proxy.py` cho Eve.
+Giao diện nằm trong `web/network/`.
 [Cây mã nguồn](REORGANIZATION.md)
 
 ```text
@@ -23,11 +25,11 @@ Alice chủ động kết nối tới Eve; Eve chủ động kết nối tới B
 cho Alice trỏ thẳng tới Bob. Các tiến trình độc lập, không có bộ nhớ chung,
 không chuyển khóa ứng dụng giữa hai đầu.
 
-Đây vẫn là **mô phỏng cổ điển**: trạng thái lượng tử là bit/cơ sở có thể đọc
-và sao chép qua mạng. Đối thủ phần mềm thực tế có thể sao chép chúng mà
-không gây QBER. Chặn–đo–gửi lại chỉ thực hiện quy tắc đo của mô hình; QBER
-thấp không chứng minh bí mật hoặc vắng Eve. Chỉ dùng nội dung thử nghiệm.
-Tailscale bảo vệ đường vận chuyển Internet riêng biệt với minh họa BB84.
+Đây là **mô phỏng cổ điển**. Cả tín hiệu BB84 và mô tả cặp E91 đều là dữ
+liệu TCP có thể đọc và sao chép. Một bên quan sát có thể chép chúng mà
+không làm thay đổi QBER hay CHSH. PSK xác thực thảo luận công khai. Chỉ
+dùng nội dung thử nghiệm. Tailscale bảo vệ đường vận chuyển Internet riêng
+biệt với mô phỏng giao thức.
 
 ## 2. Chuẩn bị thiết bị và mạng riêng
 
@@ -82,12 +84,14 @@ Trên cả hai máy, mở trang thiết lập tại `http://127.0.0.1:8770` bằ
 1. Bấm **Tạo PSK** trên một máy hoặc dùng PSK đã có. Đường dẫn mặc định là
    `outputs/network/auth.key`. Chuyển riêng tệp đó sang máy kia qua USB hoặc
    kênh tin cậy. Trên máy kia, bấm **Nhập tệp PSK** và chọn đúng tệp vừa chép.
-2. Trên máy nhận, chọn **Bob**. Chạy `ipconfig` trong PowerShell để lấy IPv4
-   của máy này trên LAN hoặc VPN. Nhập IPv4 và cổng `9100`, rồi bấm
+2. Trên máy nhận, chọn **Bob** và chọn **BB84** hoặc **E91** ở **Giao thức tạo khóa**.
+   Chạy `ipconfig` trong PowerShell để lấy IPv4 của máy này trên LAN hoặc
+   VPN. Nhập IPv4 và cổng `9100`, rồi bấm
    **Khởi động Bob**. Cho phép TCP `9100` trong tường lửa của Bob nếu cần.
-3. Trên máy gửi, chọn **Alice**. Nhập IPv4 của Bob và cùng cổng `9100`, rồi
-   bấm **Khởi động Alice**. Khi chạy Eve trên máy/VM riêng, điền địa chỉ và
-   cổng TCP của máy/VM Eve.
+3. Trên máy gửi, chọn **Alice** và chọn cùng giao thức với Bob. Nhập IPv4 của
+   Bob và cùng cổng `9100`, rồi bấm **Khởi động Alice**. Muốn chạy Eve cùng
+   máy, chọn **Chạy kèm Eve trên máy Alice** trước khi khởi động. Hai đầu
+   phải trùng giao thức thì mới thiết lập phiên được.
 4. Trên Alice, bấm **Gửi văn bản** hoặc **Gửi tệp**. Kết quả hiện ở **Bob đã
    nhận**. Tệp hoàn tất nằm trong `outputs/received/` trên máy Bob.
 
@@ -96,11 +100,14 @@ Trên cả hai máy, mở trang thiết lập tại `http://127.0.0.1:8770` bằ
 Xem **Terminal tạo khóa** trên dashboard Alice và Bob khi gửi thử. So mã phiên
 ở hai đầu để đối chiếu các bước tương ứng. Terminal hiện log của phiên đang
 chạy hoặc vừa kết thúc và ghi rõ bước dừng nếu có. Bấm **Xem log chi tiết**
-rồi chọn **BB84**, **Cascade** hoặc **Toeplitz**. Dùng **Trang trước**,
+rồi chọn **BB84** hoặc **E91** theo giao thức, **Cascade** hoặc **Toeplitz**.
+Dùng **Trang trước**,
 **Trang sau** hoặc nhập số trang để xem các dòng theo thứ tự thực thi.
 
 - **BB84** hiện cặp cơ sở công khai của từng tín hiệu, kết quả sàng lọc, các
   bit đã công khai để lấy mẫu, QBER và khoảng Wilson.
+- **E91** hiện số đếm của bốn tổ hợp đo Bell, phép ghép hệ số thành CHSH,
+  QBER của mẫu từ hai nhóm đo cùng hướng và quyết định cho phiên đi tiếp.
 - **Cascade** hiện từng truy vấn parity với 24 chỉ số đầu của khối và các
   giá trị parity đã trao đổi. Bob còn thấy các bước chia khối, lật bit và
   kiểm tra lại khối.
@@ -118,16 +125,18 @@ dung gửi được giữ kín trong log.
 Chọn **Tạo khóa từng bước** từ trang thiết lập hoặc dashboard để xem ví dụ
 giảng dạy có đầy đủ bit đầu vào, phép nhân và bit đầu ra của Toeplitz.
 
-Muốn đổi vai trò, địa chỉ hoặc bật/tắt Eve đi kèm, nhấn `Ctrl+C` rồi chạy
-lại lệnh `setup --open`. Chạy
+Muốn đổi vai trò, địa chỉ, giao thức hoặc bật/tắt Eve đi kèm, nhấn `Ctrl+C`
+rồi chạy lại lệnh `setup --open`. Để đổi giao thức, làm trên cả hai máy,
+khởi động Bob trước và dùng lại PSK đang có. Chạy
 `python -m bb84_lab.network setup --help` để xem tùy chọn tệp PSK và cổng
 giao diện.
 
 ### Chạy Eve ngay trên máy Alice
 
 1. Trên máy nhận, khởi động Bob như trên.
-2. Trên trang thiết lập của máy gửi, chọn **Alice**, điền IPv4 và cổng TCP
-   của Bob, chọn **Chạy kèm Eve trên máy Alice** rồi bấm **Khởi động Alice và Eve**.
+2. Trên trang thiết lập của máy gửi, chọn **Alice** và giao thức của Bob.
+   Điền IPv4 và cổng TCP của Bob, chọn **Chạy kèm Eve trên máy Alice** rồi
+   bấm **Khởi động Alice và Eve**.
    Cùng một trình khởi động mở Eve trên một cổng TCP loopback tự chọn và
    định tuyến Alice qua Eve tới Bob. Chỉ Alice và Bob dùng PSK.
 3. Trên dashboard Alice, mở **Bảng điều khiển Eve**. Trang Eve dùng cùng
@@ -150,9 +159,12 @@ Lệnh tạo 32 byte ngẫu nhiên, không in khóa và từ chối ghi đè. Ch
 xác thực. Không chạy `init` riêng trên hai máy vì chúng sẽ tạo hai PSK khác
 nhau. Không cấp tệp này cho Eve hoặc công khai nội dung. `outputs/` và
 `*.key` được `.gitignore` bỏ qua. PSK dùng xác thực thảo luận công khai;
-mỗi lần gửi tạo một khóa mô hình mới từ BB84/hậu xử lý.
+mỗi lần gửi tạo một khóa mô hình mới qua giao thức đã chọn và hậu xử lý.
 
 ## 4. Khởi động từng vai trò bằng dòng lệnh
+
+Ví dụ dòng lệnh dưới đây dùng BB84 mặc định. Dùng **Setup** trên cả hai
+máy để chọn E91 từ giao diện.
 
 **Laptop Bob**, chạy trước:
 
@@ -196,8 +208,9 @@ yếu có thể không bị QBER phát hiện.
 | Chế độ Eve | Điều quan sát |
 |---|---|
 | Chỉ chuyển tiếp | Không nhiễu thì QBER 0%; đủ ngân sách thì Bob nhận đúng tệp |
-| Chặn–đo–gửi lại, tỷ lệ 1 | QBER kỳ vọng 25% khi không nhiễu; thường hủy trước mã hóa |
-| Chặn–đo–gửi lại, tỷ lệ 0,1 | Có thể không phát hiện; theo dõi Wilson và xác nhận khóa |
+| Chặn–đo–gửi lại BB84, tỷ lệ 1 | QBER kỳ vọng 25% khi không nhiễu, thường hủy trước mã hóa |
+| Chặn–đo–gửi lại BB84, tỷ lệ 0,1 | Có thể không phát hiện, theo dõi Wilson và xác nhận khóa |
+| Làm mất tương quan E91, tỷ lệ 1 | Bob nhận kết quả độc lập, kỳ vọng \|S\| gần 0 và QBER mẫu gần 50%. Cổng CHSH thường dừng phiên trước mã hóa. |
 | Sửa một bit bản mã | AEAD từ chối, không phát hành tệp hoàn tất |
 | Phát lại một gói | Bộ đếm phiên/thứ tự từ chối gói trùng |
 | Ngắt truyền | Hủy tệp đang nhận khi kết nối đóng |
@@ -211,12 +224,17 @@ và codec nó hỗ trợ. Tệp khác vẫn tải về được. Có HTTP Range 
 
 1. Bob phát challenge mới. Alice tạo ID phiên gắn challenge; các thông điệp
    công khai sau đó có HMAC-SHA256 và bộ đếm từng vai trò.
-2. Alice sinh bit/cơ sở riêng bằng ngẫu nhiên OS. Eve có thể biến đổi trạng
-   thái mô phỏng trước khi Bob đo bằng cơ sở ngẫu nhiên riêng.
+2. Trong BB84, Alice sinh bit/cơ sở riêng bằng ngẫu nhiên OS. Eve có thể
+   biến đổi trạng thái mô phỏng trước khi Bob đo bằng cơ sở ngẫu nhiên
+   riêng. Trong E91, Alice tạo mô tả cổ điển cho 8.192 cặp mặc định và Bob
+   chọn hướng đo độc lập. Hai đầu xác thực và đối chiếu dữ liệu của bốn
+   tổ hợp Bell, dùng hai tổ hợp cùng hướng cho nguồn bit khóa. Bob đảo
+   kết quả cùng hướng để chuyển đối tương quan lý tưởng thành các bit khớp.
 3. Hai bên trao đổi cơ sở đã xác thực. Seed lấy mẫu được tạo **sau khi Bob
    đã đo**, hoán vị độc lập giá trị bit. Loại toàn bộ mẫu khỏi vật liệu khóa.
 4. Bob tính QBER/Wilson, Alice đối chiếu từ mẫu Bob. Thiếu mẫu, bất thường
-   hoặc khoảng cắt ngưỡng đều dừng trước mã hóa.
+   hoặc khoảng cắt ngưỡng đều dừng trước mã hóa. E91 còn yêu cầu cận dưới
+   của khoảng 95% cho `|S|` lớn hơn 2 trước khi cho phép đối soát.
 5. Bob dùng cùng lõi Cascade/lookback với demo cũ, hỏi parity Alice qua TCP.
    Mỗi truy vấn tính 2 bit rò rỉ; digest và phản hồi xác nhận tính 257 bit.
    Dùng cùng `key_budget`, biên mô hình 64 bit và Toeplitz. Dưới 256 bit
@@ -265,10 +283,11 @@ Mở `http://127.0.0.1:8770` cho Bob, `http://127.0.0.1:8771` cho Eve và
 
 ## 8. Kiểm chứng và giới hạn
 
-`python -m tests.self_check` kiểm tra socket thật: nhị phân nhiều khối, UTF-8,
-tệp rỗng, đi thẳng/qua proxy, PSK sai, thiếu mẫu/ngân sách, chặn toàn phần,
-sửa gói, phát lại, ngắt truyền, HMAC sai, upload HTTP, download/Range và không
-còn tệp tạm sau lỗi.
+`python -m tests.self_check` kiểm tra socket thật. Phần mạng gồm truyền tệp
+BB84 và E91, phiên E91 dừng tại CHSH, hai đầu chọn khác giao thức, nhị phân
+nhiều khối, UTF-8, tệp rỗng, đi thẳng hoặc qua proxy, PSK sai, thiếu mẫu
+hoặc ngân sách, sửa gói, phát lại, ngắt truyền, HMAC sai, upload HTTP,
+download/Range và dọn tệp tạm sau lỗi.
 
 Kiểm tra Chrome đã chạy ba tiến trình CLI riêng: văn bản UTF-8 có chuỗi giống
 HTML được hiển thị đúng dạng văn bản, PNG xem được, MP4 phát được, tải video

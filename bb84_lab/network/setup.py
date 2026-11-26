@@ -6,6 +6,7 @@ from pathlib import Path
 import secrets
 import threading
 
+from bb84_lab.network.config import PROTOCOLS
 from bb84_lab.network.service import NetworkNode, make_transport_server
 from bb84_lab.shared.paths import OUTPUT_ROOT
 
@@ -74,6 +75,7 @@ class NetworkSetup:
                 ready = False
             return {"psk_ready": ready, "psk_exists": path.exists() or path.is_symlink(),
                     "psk_path": str(path), "role": self._node.role if self._node else None,
+                    "protocol": self._node.protocol if self._node else None,
                     "eve_enabled": self._eve is not None, "port": DEFAULT_PORT}
 
     def _check_available(self):
@@ -88,11 +90,13 @@ class NetworkSetup:
             except FileExistsError:
                 raise SetupConflict("Đã có tệp PSK tại vị trí này. Tệp đang dùng được giữ nguyên.") from None
 
-    def start(self, role, host, port, *, eve=False):
+    def start(self, role, host, port, *, eve=False, protocol="bb84"):
         if role not in ("alice", "bob") or type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("Chọn vai trò Alice hoặc Bob và cổng TCP từ 1 đến 65535")
         if type(eve) is not bool or (eve and role != "alice"):
             raise ValueError("Chỉ máy Alice có thể chọn chạy kèm Eve")
+        if protocol not in PROTOCOLS:
+            raise ValueError("Chọn giao thức BB84 hoặc E91")
         if type(host) is not str:
             raise ValueError("Nhập địa chỉ IPv4, ví dụ 192.168.1.20")
         try:
@@ -110,8 +114,8 @@ class NetworkSetup:
 
             address = str(ip), port
             target = address if role == "alice" else None
-            node = NetworkNode(role, psk, target=target, inbox=self._inbox)
-            relay = NetworkNode("eve", target=address) if eve else None
+            node = NetworkNode(role, psk, target=target, inbox=self._inbox, protocol=protocol)
+            relay = NetworkNode("eve", target=address, protocol=protocol) if eve else None
             if eve or role == "bob":
                 listener = relay if eve else node
                 bind_address = ("127.0.0.1", 0) if eve else address

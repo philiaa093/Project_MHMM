@@ -6,20 +6,23 @@ from pathlib import Path
 import socketserver
 import threading
 
-from bb84_lab.network.config import DEFAULT_MAX_FILE_BYTES
+from bb84_lab.network.config import DEFAULT_MAX_FILE_BYTES, PROTOCOLS
 from bb84_lab.network.transfer import receive_transfer, send_transfer
 from bb84_lab.network.proxy import relay
+from bb84_lab.network.transport import ProtocolMismatch
 
 
-TRACE_STAGES = ("bb84", "cascade", "toeplitz")
 TRACE_STAGE_LIMIT = 8192
 TRACE_PAGE_SIZE = 100
 
 
 class NetworkNode:
     def __init__(self, role, psk=None, target=None, inbox="outputs/received", max_bytes=DEFAULT_MAX_FILE_BYTES,
-                 mode="pass", fraction=1.0, seed=2026, noise=0):
+                 mode="pass", fraction=1.0, seed=2026, noise=0, *, protocol="bb84"):
+        if protocol not in PROTOCOLS:
+            raise ValueError("Chọn giao thức BB84 hoặc E91")
         self.role, self._psk, self.target = role, psk, target
+        self.protocol = protocol
         self.inbox, self.max_bytes = Path(inbox), max_bytes
         self.mode, self.fraction, self.seed, self.noise = mode, fraction, seed, noise
         self._lock = threading.Lock()
@@ -32,8 +35,8 @@ class NetworkNode:
         self._progress = {"bytes": 0, "total": 0}
         self._trace_session_id = None
         self._trace_steps = deque(maxlen=32)
-        self._trace_details = {stage: [] for stage in TRACE_STAGES}
-        self._trace_omitted = dict.fromkeys(TRACE_STAGES, 0)
+        self._trace_details = {stage: [] for stage in (protocol, "cascade", "toeplitz")}
+        self._trace_omitted = dict.fromkeys(self._trace_details, 0)
         self._trace_active = False
         self.listen_address = None
 
@@ -97,7 +100,7 @@ class NetworkNode:
 
     def snapshot(self):
         with self._lock:
-            snapshot = {"role": self.role, "state": self._state, "busy": self.busy.locked(),
+            snapshot = {"role": self.role, "protocol": self.protocol, "state": self._state, "busy": self.busy.locked(),
                     "target": list(self.target) if self.target else None,
                     "listen": self.listen_address, "max_file_bytes": self.max_bytes,
                     "mode": self.mode, "fraction": self.fraction, "seed": self.seed,
@@ -144,7 +147,7 @@ class NetworkNode:
         def worker():
             try:
                 send_transfer(self.target, self._psk, path, name, kind, config, self.event, self.max_bytes,
-                              record_details=self.record_details)
+                              record_details=self.record_details, protocol=self.protocol)
             except Exception as error:
                 self.event("failed", _error_message(error))
             finally:
@@ -158,6 +161,8 @@ class NetworkNode:
 def _error_message(error):
     # Do not expose exception reprs containing payloads, paths or key material.
     from bb84_lab.core.secure_channel import AuthenticationError
+    if isinstance(error, ProtocolMismatch):
+        return "Alice và Bob phải chọn cùng giao thức BB84 hoặc E91. Mở lại Setup trên máy cần đổi."
     if isinstance(error, AuthenticationError):
         return "Xác thực thất bại hoặc gói bị phát lại; đã hủy phiên"
     if isinstance(error, (ConnectionError, OSError, TimeoutError)):
@@ -190,7 +195,7 @@ class _Handler(socketserver.BaseRequestHandler):
         try:
             if node.role == "bob":
                 receive_transfer(self.request, node._psk, node.inbox, node.event, node.max_bytes,
-                                 node.noise, node.completed, record_details=node.record_details)
+                                 node.noise, node.completed, record_details=node.record_details, protocol=node.protocol)
             else:
                 relay(self.request, node.target, node.mode, node.fraction, node.seed, node.event)
         except Exception as error:

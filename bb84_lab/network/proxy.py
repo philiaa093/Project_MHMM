@@ -5,10 +5,14 @@ import random
 import select
 import socket
 
+from bb84_lab.network.config import E91_PAIR_FRAME, E91_REPLACED_STATE
 from bb84_lab.network.transport import configure_socket, receive_frame, send_frame
 
 
 ATTACK_MODES = {"pass", "intercept", "tamper", "replay", "drop", "tamper-public"}
+MONITOR_FIELDS = {"sample_count", "sample_errors", "qber", "ci_low", "ci_high", "status", "reason",
+                  "qber_status", "qber_reason"}
+BELL_FIELDS = {"s", "abs_s", "ci_low", "ci_high", "status"}
 
 
 def relay(alice, target, mode="pass", fraction=1.0, seed=2026, event=lambda *a, **k: None):
@@ -46,6 +50,15 @@ def relay(alice, target, mode="pass", fraction=1.0, seed=2026, event=lambda *a, 
                     frame = {**frame, "states": changed}
                     event("attack", "Đã chặn–đo–gửi lại tín hiệu mô phỏng", intercepted=intercepted,
                           signals=len(states), mode=mode, seed=seed)
+                if source is alice and frame.get("kind") == E91_PAIR_FRAME and mode == "intercept":
+                    states = frame.get("states")
+                    if type(states) is not list or any(type(state) is not int or not 0 <= state < E91_REPLACED_STATE
+                                                      for state in states):
+                        raise ValueError("Sai cặp E91 mô phỏng")
+                    changed = [E91_REPLACED_STATE if rng.random() < fraction else state for state in states]
+                    frame = {**frame, "states": changed}
+                    event("attack", "Đã thay một phần cặp E91 bằng kết quả độc lập ở Bob",
+                          intercepted=changed.count(E91_REPLACED_STATE), signals=len(states), mode=mode)
                 if (source is alice and mode == "tamper-public" and not attacked
                         and frame.get("kind") == "public"):
                     frame["payload"] = {**frame.get("payload", {}), "modified_by_proxy": True}
@@ -68,12 +81,15 @@ def relay(alice, target, mode="pass", fraction=1.0, seed=2026, event=lambda *a, 
                         event("attack", "Đã gửi lặp một gói mã hóa", mode=mode)
                 if source is bob and frame.get("kind") == "public":
                     payload = frame.get("payload", {})
-                    if payload.get("kind") == "decision":
-                        event("qber", "Quan sát thống kê công khai từ Bob (Eve không có PSK)",
-                              **payload.get("decision", {}))
-                        if payload.get("decision", {}).get("status") != "continue":
-                            event("aborted", "Bob dừng phiên theo kết quả QBER công khai",
-                                  **payload.get("decision", {}))
+                    if payload.get("kind") in ("decision", "e91-decision"):
+                        decision = payload["decision"]
+                        summary = {field: decision[field] for field in MONITOR_FIELDS if field in decision}
+                        if payload["kind"] == "e91-decision":
+                            bell = decision["bell"]
+                            summary["bell"] = {field: bell[field] for field in BELL_FIELDS if field in bell}
+                        event("qber", "Quan sát thống kê công khai từ Bob (Eve không có PSK)", **summary)
+                        if decision.get("status") != "continue":
+                            event("aborted", "Bob dừng phiên theo kết quả giám sát công khai", **summary)
                     elif payload.get("kind") == "receipt":
                         event("complete", "Đã chuyển tiếp biên nhận của Bob", bytes=payload.get("size"))
                 send_frame(destination, frame)

@@ -49,7 +49,7 @@
       <section class="network-panel setup-panel" aria-labelledby="setup-role-title">
         <div class="setup-heading">
           <span class="setup-number" aria-hidden="true">2</span>
-          <h2 id="setup-role-title">Vai trò và địa chỉ</h2>
+          <h2 id="setup-role-title">Vai trò, giao thức và địa chỉ</h2>
         </div>
         <form id="setup-role-form" class="setup-form">
           <fieldset id="setup-role-options" class="setup-role-options" disabled>
@@ -64,6 +64,20 @@
                 <span><strong>Alice</strong><small>Gửi dữ liệu</small></span>
               </label>
             </div>
+          </fieldset>
+          <fieldset id="setup-protocol-options" class="setup-role-options" disabled aria-describedby="setup-protocol-help">
+            <legend>Giao thức tạo khóa</legend>
+            <div class="setup-role-choices">
+              <label class="setup-role-choice">
+                <input id="setup-protocol-bb84" type="radio" name="protocol" value="bb84" aria-label="BB84" aria-describedby="setup-protocol-bb84-help" checked>
+                <span><strong>BB84</strong><small id="setup-protocol-bb84-help">Sàng lọc cơ sở và QBER</small></span>
+              </label>
+              <label class="setup-role-choice">
+                <input id="setup-protocol-e91" type="radio" name="protocol" value="e91" aria-label="E91" aria-describedby="setup-protocol-e91-help">
+                <span><strong>E91</strong><small id="setup-protocol-e91-help">Kiểm tra CHSH và QBER</small></span>
+              </label>
+            </div>
+            <p id="setup-protocol-help" class="input-help setup-protocol-help">Chọn cùng giao thức trên Alice và Bob.</p>
           </fieldset>
           <div class="setup-address">
             <div class="form-row">
@@ -85,7 +99,7 @@
         </form>
         <div id="setup-active" class="setup-active" hidden>
           <p id="setup-active-role" class="receiver-note"></p>
-          <p class="input-help">Để đổi vai trò hoặc địa chỉ, dừng trình khởi động bằng <kbd>Ctrl+C</kbd> rồi mở lại.</p>
+          <p class="input-help">Để đổi vai trò, giao thức hoặc địa chỉ, dừng trình khởi động bằng <kbd>Ctrl+C</kbd> rồi mở lại.</p>
           <div class="setup-active-links">
             <a href="/" class="button primary">Mở giao diện gửi nhận</a>
             <a id="setup-active-eve" href="/eve" class="button secondary" hidden>Mở bảng điều khiển Eve</a>

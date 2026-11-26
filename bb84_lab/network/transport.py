@@ -57,6 +57,10 @@ def configure_socket(connection):
     connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
 
+class ProtocolMismatch(AuthenticationError):
+    """Authenticated peers selected different educational protocols."""
+
+
 class PublicPeer:
     def __init__(self, connection, psk, session_id, role):
         self.connection = connection
@@ -89,6 +93,8 @@ class PublicPeer:
             raise AuthenticationError("Xác thực thảo luận công khai thất bại") from error
         if payload.get("kind") == "abort":
             raise AuthenticationError("Đầu bên kia đã hủy phiên")
+        if payload.get("kind") == "protocol-mismatch":
+            raise ProtocolMismatch("Alice và Bob phải chọn cùng giao thức")
         if kind is not None and payload.get("kind") != kind:
             raise AuthenticationError("Sai bước giao thức")
         return payload

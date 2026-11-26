@@ -6,7 +6,7 @@ import re
 import tempfile
 from urllib.parse import quote, unquote
 
-from bb84_lab.network.config import CHUNK_BYTES, network_config
+from bb84_lab.network.config import CHUNK_BYTES
 from bb84_lab.network.setup import PSK_BYTES, SetupConflict
 from bb84_lab.shared.http import LoopbackHandler, validate_message
 from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
@@ -15,7 +15,7 @@ from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
 MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                ".gif": "image/gif", ".webp": "image/webp", ".mp4": "video/mp4",
                ".webm": "video/webm", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}
-KEY_TRACE_ROUTE = re.compile(r"/api/key-trace/([0-9a-f]{64})/(bb84|cascade|toeplitz)/([0-9]{1,8})")
+KEY_TRACE_ROUTE = re.compile(r"/api/key-trace/([0-9a-f]{64})/(bb84|e91|cascade|toeplitz)/([0-9]{1,8})")
 STATIC_FILES = {
     "/app.js": ("network/app.js", "text/javascript; charset=utf-8"),
     "/styles.css": ("network/styles.css", "text/css; charset=utf-8"),
@@ -101,7 +101,7 @@ class NetworkHandler(LoopbackHandler):
 
     def _key_trace_page(self, session_id, stage, offset):
         node = self._node
-        if node is None or node.role == "eve":
+        if node is None or node.role == "eve" or stage not in (node.protocol, "cascade", "toeplitz"):
             self._error(404, "Log chi tiết chỉ có trên Alice và Bob")
             return
         page = node.trace_page(session_id, stage, offset)
@@ -175,9 +175,10 @@ class NetworkHandler(LoopbackHandler):
                     raise ValueError("Yêu cầu tạo PSK không có tham số")
                 launcher.write_psk()
             else:
-                if set(payload).difference({"eve"}) != {"role", "host", "port"}:
+                if set(payload).difference({"eve", "protocol"}) != {"role", "host", "port"}:
                     raise ValueError("Cần vai trò, địa chỉ IPv4 và cổng TCP")
-                launcher.start(payload["role"], payload["host"], payload["port"], eve=payload.get("eve", False))
+                launcher.start(payload["role"], payload["host"], payload["port"],
+                               eve=payload.get("eve", False), protocol=payload.get("protocol", "bb84"))
         self._json(200, launcher.snapshot())
 
     def do_POST(self):
@@ -262,5 +263,5 @@ def make_ui_server(node=None, port=8770, config=None, launcher=None):
     server.daemon_threads = True
     server.node = node
     server.launcher = launcher
-    server.config = network_config() if config is None else config
+    server.config = config
     return server

@@ -6,6 +6,7 @@ import json
 import math
 import secrets
 from bb84_lab.core.bb84 import Config, evaluate, expected_qber, monitor, run_session, simulate, wilson_interval
+from bb84_lab.core.e91 import simulate_e91
 from bb84_lab.simulation.session import integrated_session
 from bb84_lab.core.postprocess import key_budget, pack_bits, postprocess, reconcile, toeplitz_bits
 from bb84_lab.core.secure_channel import AuthenticatedTranscript, AuthenticationError, DemoChannel
@@ -69,6 +70,59 @@ def check_bb84():
     strong = [run_session(Config(eve_fraction=1, seed=seed)) for seed in range(30)]
     assert sum(item.status == "anomalous" for item in strong) / len(strong) >= .95
     assert all(item.y_pre == 0 for item in strong if item.status != "continue")
+
+
+def check_e91():
+    ideal = simulate_e91()
+    assert ideal == simulate_e91(signals=4096, seed=2026, noise_probability=0)
+    assert set(ideal) == {"signals", "seed", "noise_probability", "discarded_count", "bell", "key"}
+    bell, key = ideal["bell"], ideal["key"]
+    assert [(row["alice_angle"], row["bob_angle"], row["sign"]) for row in bell["pairs"]] == [
+        (0, 45, 1), (0, 135, -1), (90, 45, 1), (90, 135, 1)
+    ]
+    assert [(row["alice_angle"], row["bob_angle"]) for row in key["pairs"]] == [(45, 45), (90, 90)]
+    assert math.isclose(bell["expected_s"], -2 * math.sqrt(2))
+    assert key["qber"] == key["expected_qber"] == 0
+    assert bell["status"] == "violation" and bell["ci_low"] > 2
+
+    for probability in (0.3, 1):
+        run = simulate_e91(signals=16384, noise_probability=probability)
+        bell, key = run["bell"], run["key"]
+        assert math.isclose(bell["expected_s"], -2 * math.sqrt(2) * (1 - probability), abs_tol=1e-12)
+        assert math.isclose(key["expected_qber"], probability / 2)
+        assert abs(bell["s"] - bell["expected_s"]) < 0.15
+        assert abs(key["qber"] - key["expected_qber"]) < 0.04
+        if probability == 1:
+            assert bell["status"] == "at_or_below_bound" and bell["ci_high"] <= 2
+
+    for run in (ideal, simulate_e91(noise_probability=0.3)):
+        bell, key = run["bell"], run["key"]
+        for row in bell["pairs"] + key["pairs"]:
+            assert row["count"] == sum(row[term] for term in ("pp", "pm", "mp", "mm"))
+        for row in bell["pairs"]:
+            assert math.isclose(row["correlation"], (row["pp"] + row["mm"] - row["pm"] - row["mp"]) / row["count"])
+        for row in key["pairs"]:
+            assert row["errors"] == row["pp"] + row["mm"]
+        assert math.isclose(bell["s"], sum(row["sign"] * row["correlation"] for row in bell["pairs"]))
+        assert bell["ci_low"] <= abs(bell["s"]) <= bell["ci_high"]
+        assert key["qber"] == key["errors"] / key["count"]
+        assert key["count"] == sum(row["count"] for row in key["pairs"])
+        assert key["errors"] == sum(row["errors"] for row in key["pairs"])
+        assert key["count"] + sum(row["count"] for row in bell["pairs"]) + run["discarded_count"] == run["signals"]
+        assert (key["ci_low"], key["ci_high"]) == wilson_interval(key["errors"], key["count"])
+
+    tiny_runs = [simulate_e91(signals=1, seed=seed) for seed in range(12)]
+    for run in tiny_runs:
+        bell = run["bell"]
+        assert bell["status"] == "inconclusive"
+        assert all(bell[field] is None for field in ("s", "abs_s", "ci_low", "ci_high"))
+        assert all(row["correlation"] is None for row in bell["pairs"] if row["count"] == 0)
+    empty_key = next(run["key"] for run in tiny_runs if run["key"]["count"] == 0)
+    assert all(empty_key[field] is None for field in ("qber", "ci_low", "ci_high"))
+    for change in ({"signals": 0}, {"signals": 65537}, {"signals": True}, {"seed": -1},
+                   {"seed": 2**31}, {"noise_probability": True}, {"noise_probability": 1.1},
+                   {"noise_probability": float("inf")}):
+        rejected(lambda change=change: simulate_e91(**change))
 
 
 def check_postprocessing():

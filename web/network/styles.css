@@ -1,6 +1,8 @@
 .network-nav { display: flex; flex-wrap: wrap; align-items: center; column-gap: 18px; row-gap: 8px; font-size: 14px; }
 .network-nav a { color: var(--muted); text-underline-offset: 4px; }
 .network-nav a[aria-current=page] { color: var(--ink); font-weight: 650; }
+.network-role-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.network-protocol-badge { background: #dce6ff; color: #203d84; font-weight: 750; }
 .network-route { display: grid; grid-template-columns: 1fr 50px 1fr 50px 1fr; align-items: center; margin: 22px 0; border: 1px solid var(--line); border-radius: 10px; background: white; padding: 19px 22px; }
 .network-route > div { display: flex; flex-direction: column; align-items: center; padding: 10px; border-radius: 7px; }
 .network-route > div.current { background: #e4ebff; box-shadow: inset 0 -3px var(--blue); }

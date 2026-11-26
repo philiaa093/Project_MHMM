@@ -7,6 +7,7 @@ import re
 from urllib.parse import quote
 
 from bb84_lab.core.bb84 import Config
+from bb84_lab.core.e91 import simulate_e91
 from bb84_lab.core.secure_channel import AuthenticationError
 from bb84_lab.shared.http import LoopbackHandler, validate_message
 from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
@@ -47,7 +48,8 @@ class DemoHandler(LoopbackHandler):
             path = self._path()
             static = {"/": "simulation/index.html", "/index.html": "simulation/index.html",
                       "/shared/styles.css": "shared/styles.css",
-                      "/app.js": "simulation/app.js", "/education.js": "simulation/education.js"}
+                      "/app.js": "simulation/app.js", "/education.js": "simulation/education.js",
+                      "/e91.js": "simulation/e91.js", "/e91.css": "simulation/e91.css"}
             if path in static:
                 file = WEB_ROOT / static[path]
                 if not file.is_file():
@@ -110,10 +112,16 @@ class DemoHandler(LoopbackHandler):
             return
         try:
             path = self._path()
-            if path not in ("/api/session", "/api/aead", "/api/lesson", "/api/packet", "/api/packet/action"):
+            if path not in ("/api/session", "/api/aead", "/api/lesson", "/api/packet", "/api/packet/action",
+                            "/api/e91/simulate"):
                 self._error(404, "Không tìm thấy đường dẫn", "not_found")
                 return
             payload = self._read_json()
+            if path == "/api/e91/simulate":
+                if set(payload) != {"signals", "seed", "noise_probability"}:
+                    raise ValueError("E91 cần số cặp, seed và xác suất nhiễu")
+                self._json(200, simulate_e91(**payload))
+                return
             if path == "/api/lesson":
                 if set(payload) - {"scenario", "seed"}:
                     raise ValueError("Unsupported lesson fields")

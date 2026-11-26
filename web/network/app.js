@@ -4,13 +4,15 @@ const $ = (id) => document.getElementById(id);
 const embeddedEve = window.location.pathname === "/eve";
 const apiPrefix = embeddedEve ? "/api/eve" : "/api";
 const labels = { idle: "Chờ phiên mới", connecting: "Đang kết nối", connected: "Đã kết nối", qber: "Đã đo QBER", key: "Khóa đã khớp", transferring: "Đang truyền", complete: "Hoàn tất", aborted: "Đã hủy", failed: "Thất bại", configured: "Đã đổi chế độ", attack: "Đã can thiệp" };
-const decisions = { continue: "Cho phép đi tiếp", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng", insufficient_key: "Không đủ bit khóa" };
+const decisions = { continue: "Cho phép đi tiếp", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng", insufficient_key: "Không đủ bit khóa", chsh_rejected: "CHSH không vượt mốc 2", chsh_inconclusive: "CHSH chưa đủ bằng chứng" };
+const bellStatuses = { violation: "Vượt mốc 2", at_or_below_bound: "Trong giới hạn cổ điển", inconclusive: "Chưa đủ bằng chứng" };
 const modes = { pass: "Chỉ chuyển tiếp", intercept: "Chặn–đo–gửi lại", tamper: "Sửa bản mã", replay: "Phát lại", drop: "Ngắt truyền", "tamper-public": "Sửa thảo luận công khai" };
-const traceStages = { auth: "Xác thực", bb84: "BB84", cascade: "Cascade", toeplitz: "Toeplitz", transfer: "Truyền dữ liệu" };
+const traceStages = { auth: "Xác thực", bb84: "BB84", e91: "E91", cascade: "Cascade", toeplitz: "Toeplitz", transfer: "Truyền dữ liệu" };
 const traceStatuses = { info: "Thông tin", ok: "Đạt", stopped: "Dừng", error: "Lỗi" };
 const tracePageSize = 100;
 const traceStageButtons = document.querySelectorAll("[data-key-trace-stage]");
 const percent = (v) => v == null ? "—" : `${(100 * v).toFixed(2)}%`;
+const bellFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 const bytes = (n) => n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(2)} MiB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KiB` : `${n} byte`;
 let state = null;
 let uploading = false;
@@ -122,7 +124,7 @@ function renderKeyTrace(trace) {
 async function copyKeyTrace() {
   const trace = renderedTrace;
   if (!trace?.steps.length) return;
-  const title = `Terminal tạo khóa · ${state.role === "alice" ? "Alice" : "Bob"} · Phiên ${trace.session_id || "chưa có mã"}`;
+  const title = `Terminal tạo khóa · ${state.role === "alice" ? "Alice" : "Bob"} · ${$("protocol-badge").textContent} · Phiên ${trace.session_id || "chưa có mã"}`;
   const lines = trace.steps.map((step) =>
     `[${step.time}] [${traceStages[step.stage]}] [${traceStatuses[step.status]}] ${step.title}\n${step.detail}`);
   try {
@@ -211,7 +213,7 @@ function renderKeyTraceDetails(trace) {
   if (panel.hidden) return;
   if (traceDetail.sessionId !== trace.session_id) {
     traceDetail.sessionId = trace.session_id;
-    resetTraceDetailPage("bb84", 0);
+    resetTraceDetailPage(state.protocol === "e91" ? "e91" : "bb84", 0);
   }
   if (panel.open) {
     renderTraceDetailPage();
@@ -222,6 +224,7 @@ function renderKeyTraceDetails(trace) {
 function render(next) {
   const first = state === null;
   state = next;
+  const isE91 = state.protocol === "e91";
   if (first) {
     $("setup-link").hidden = !state.setup_available;
     $("eve-link").hidden = !embeddedEve && !state.eve_available;
@@ -232,12 +235,25 @@ function render(next) {
     }
     const names = { alice: "Alice · Gửi dữ liệu", bob: "Bob · Nhận dữ liệu", eve: "Eve · Điều khiển can thiệp" };
     $("role-title").textContent = names[state.role];
+    const protocolName = isE91 ? "E91" : "BB84";
+    document.title = `${protocolName} qua mạng · BB84 Lab`;
+    $("protocol-badge").textContent = protocolName;
+    $("protocol-badge").hidden = false;
+    if (isE91) $("key-lesson-link").textContent = "Bài học BB84";
     $("role-badge").textContent = embeddedEve ? "Cùng máy Alice" : state.role === "eve" ? "Máy thứ ba / máy ảo" : "Thiết bị độc lập";
-    $("role-description").textContent = state.role === "eve" ? "Quan sát và tác động lên đường truyền giữa hai thiết bị." : "Văn bản, hình ảnh, âm thanh và video giữa hai thiết bị khác mạng.";
+    $("role-description").textContent = state.role === "eve" ? `Quan sát và tác động lên đường truyền mô phỏng ${protocolName}.` : `Gửi văn bản và tệp giữa hai máy với phiên ${protocolName} mô phỏng.`;
     $(`${state.role}-controls`).hidden = false;
     document.querySelector(`[data-role="${state.role}"]`).classList.add("current");
     $("inbox-section").hidden = state.role !== "bob";
     $("key-terminal").hidden = !["alice", "bob"].includes(state.role);
+    $("key-terminal-description").textContent = `Nhật ký ${protocolName}, Cascade và Toeplitz của phiên trên máy này.`;
+    $("decision-label").textContent = isE91 ? "Quyết định CHSH và QBER" : "Quyết định QBER";
+    for (const metric of document.querySelectorAll("[data-e91-metric]")) metric.hidden = !isE91;
+    for (const button of traceStageButtons) {
+      const stage = button.dataset.keyTraceStage;
+      if (stage === "e91" || stage === "bb84") button.hidden = stage !== (isE91 ? "e91" : "bb84");
+    }
+    resetTraceDetailPage(isE91 ? "e91" : "bb84", 0);
     const nextRole = state.eve_available ? "Eve" : embeddedEve ? "Bob" : "Đầu tiếp theo";
     const destination = state.target ? `${nextRole}: ${state.target.join(":")}. ` : "";
     const listen = state.listen ? `Lắng nghe: ${state.listen.join(":")}.` : "";
@@ -246,10 +262,15 @@ function render(next) {
     if (state.role === "eve") {
       $("attack-mode").value = state.mode;
       $("eve-fraction").value = state.fraction;
+      if (isE91) {
+        $("eve-intercept-mode").textContent = "Làm mất tương quan";
+        $("eve-fraction-label").textContent = "Tỷ lệ cặp bị làm mất tương quan";
+        $("eve-fraction-help").textContent = "Từ 0 đến 1, áp dụng khi chọn làm mất tương quan. Trên các cặp bị chọn, phép đo của Bob cho kết quả ngẫu nhiên độc lập.";
+      }
     }
   }
   $("connection").textContent = "Giao diện local đang kết nối";
-  $("state").textContent = labels[state.state] || state.state;
+  $("state").textContent = isE91 && state.state === "qber" ? "Đã đo CHSH và QBER" : labels[state.state] || state.state;
   $("state").dataset.state = state.state;
   const s = state.statistics;
   $("qber").textContent = percent(s.qber);
@@ -258,6 +279,12 @@ function render(next) {
   $("retained").textContent = s.retained_bits ?? "—";
   $("output-bits").textContent = s.output_bits ?? "—";
   $("decision").textContent = decisions[s.status] || "—";
+  if (isE91) {
+    const bell = s.bell;
+    $("chsh-value").textContent = bell?.abs_s == null ? "—" : bellFormat.format(bell.abs_s);
+    $("chsh-interval").textContent = bell?.ci_low == null ? "—" : `${bellFormat.format(bell.ci_low)} đến ${bellFormat.format(bell.ci_high)}`;
+    $("chsh-status").textContent = bellStatuses[bell?.status] || "—";
+  }
   $("session-note").textContent = s.session_id ? `Phiên ${s.session_id.slice(0, 16)}…` : "Kết quả xuất hiện khi hai bên thực hiện giao thức.";
   const progress = state.progress;
   $("transfer-progress").max = Math.max(1, progress.total || 0);
@@ -267,7 +294,10 @@ function render(next) {
     renderKeyTrace(state.key_trace);
     renderKeyTraceDetails(state.key_trace);
   }
-  if (state.role === "eve") $("active-mode").textContent = `Đang dùng: ${modes[state.mode]}; tỷ lệ ${state.fraction}.`;
+  if (state.role === "eve") {
+    const name = isE91 && state.mode === "intercept" ? $("eve-intercept-mode").textContent : modes[state.mode];
+    $("active-mode").textContent = `Đang dùng ${name}. Tỷ lệ ${state.fraction}.`;
+  }
   const signature = JSON.stringify(state.events);
   if (signature !== renderedEvents) {
     renderedEvents = signature;

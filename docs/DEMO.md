@@ -1,5 +1,8 @@
 # Kịch bản demo BB84 Lab — 5–7 phút
 
+Nếu trình bày cả BB84 và E91 qua mạng hai máy, dùng
+[kịch bản kết hợp khoảng 8 phút](#kịch-bản-kết-hợp-bb84-hai-máy-và-e91).
+
 ## Chuẩn bị
 
 ```powershell
@@ -107,10 +110,11 @@ Bấm **Tải CSV** trong **Các phiên vừa chạy** để cho thấy chỉ c�
 Chỉ các manifest `complete` được dùng làm kết quả. Giới thiệu `tests/self_check.py`,
 `bb84_lab/research/verify_quantum.py`, `selection.json` và các seed/cấu hình đã lưu.
 
-Mở nhanh **Giới thiệu** để chốt câu hỏi “nếu không dùng BB84”: B92/E91 là các
-phương án QKD cần mô hình đo khác; ML-KEM phù hợp khi chỉ có hạ tầng phần mềm;
-DH/ECDH là đối sánh cổ điển và không chống máy lượng tử đủ mạnh. ChaCha20-Poly1305
-không thay BB84 vì nó mã hóa dữ liệu sau khi khóa đã được thiết lập.
+Mở nhanh **Giới thiệu** để đối chiếu các cách thiết lập khóa. Tab **E91** minh họa
+phép đo trên các cặp vướng víu. B92 là phương án QKD dùng hai trạng thái không
+trực giao. ML-KEM phù hợp khi chỉ có hạ tầng phần mềm. DH/ECDH là đối sánh cổ
+điển và không chống máy lượng tử đủ mạnh. ChaCha20-Poly1305 mã hóa dữ liệu sau
+khi khóa đã được thiết lập.
 
 Kết thúc bằng phạm vi: mạch một qubit được đối chiếu Qiskit/Aer; không có phần cứng
 quang học. Wilson và ngân sách entropy là công cụ giáo dục, chưa phải chứng minh
@@ -119,9 +123,8 @@ finite-key/composable. Kết quả “chưa tìm được tỷ lệ tốt hơn B
 
 ## Trình diễn cơ chế trên web
 
-Khi thầy muốn xem BB84 hoặc mã hóa đang làm gì, dùng hai trang sau. Dành
-khoảng 2–3 phút thay cho phần đọc log chi tiết, hoặc trình diễn riêng sau
-kịch bản 5–7 phút phía trên.
+Dùng các trang dưới đây để trình diễn phép đo hoặc mã hóa. Có thể thay phần
+đọc log chi tiết bằng một mục, hoặc trình diễn riêng sau kịch bản 5–7 phút.
 
 ### BB84 từng bước
 
@@ -155,6 +158,188 @@ kịch bản 5–7 phút phía trên.
 
 Gói hết hạn sau 10 phút hoặc có thể bị thay thế khi bộ nhớ đạt giới hạn.
 Chỉ dùng thông điệp thử nghiệm công khai; bản rõ/bản mã không đưa vào log/CSV.
+
+### E91 và phép kiểm tra CHSH
+
+Kịch bản khoảng 3–4 phút. Mở dashboard cục bộ rồi vào tab **E91**.
+
+```powershell
+.\.venv\Scripts\python.exe -m bb84_lab.local --open
+```
+
+**0:00–0:30 · Chạy hai lượt.** Điền **Số cặp N = 4096**, **Seed = 2026**,
+đặt **Xác suất nhiễu trắng = 50%**, rồi bấm **So sánh lý tưởng và có nhiễu**.
+Chỉ vào dòng cấu hình chung phía trên biểu đồ.
+
+> Đây là mô phỏng phép đo E91 trên các cặp singlet. Nút này chạy hai lượt
+> với cùng 4.096 cặp và cùng seed. Lượt lý tưởng dùng nhiễu 0%, lượt còn
+> lại dùng nhiễu trắng 50%.
+
+**0:30–1:25 · Đọc hai biểu đồ.** Trên biểu đồ **CHSH |S|**, chỉ vào vạch
+đứt ở 2, hai thanh và khoảng 95% dưới mỗi thanh. Trên biểu đồ **QBER**,
+chỉ vào số lỗi và mẫu số 969 bên dưới hai thanh.
+
+> Vạch 2 là giới hạn CHSH của mô hình cổ điển cục bộ. Ở lượt lý tưởng,
+> |S| khoảng 2,83 và cả khoảng 95% nằm trên 2. Với nhiễu 50%, |S| giảm còn
+> khoảng 1,34 và cả khoảng nằm dưới 2. QBER trên các cặp đo cùng hướng
+> tăng từ 0% lên 24,87%.
+
+**1:25–2:25 · Mở log lý tưởng.** Bấm **Xem nhật ký lý tưởng**. Chỉ vào
+nhãn nhiễu `0%`, hàng `0° / 45°` trong **Nhật ký tính CHSH** và phép cộng
+bốn hệ số bên dưới. Cuộn đến **Nhật ký tính QBER** để chỉ hai hàng có 0 lỗi.
+
+> Hai dấu trong bảng lần lượt là kết quả của Alice và Bob. Ở hàng
+> 0° / 45°, lấy số cùng dấu trừ số trái dấu rồi chia 451. Ta có
+> (29 + 25 − 196 − 201) / 451 ≈ −0,7605. Ghép bốn hệ số bằng các dấu
+> cộng, trừ, cộng, cộng thì S ≈ −2,8313. Biểu đồ dùng trị tuyệt đối của S.
+> Hai nhóm đo cùng hướng có tổng cộng 0 lỗi trên 969 cặp sau khi Bob đảo bit.
+
+**2:25–3:30 · Mở log có nhiễu.** Cuộn lên hai biểu đồ, bấm
+**Xem nhật ký có nhiễu**. Chỉ vào nhãn nhiễu `50%`, cùng hàng `0° / 45°`
+và hai dòng đếm lỗi trong **Nhật ký tính QBER**.
+
+> Với nhiễu 50%, hàng 0° / 45° cho (75 + 75 − 150 − 151) / 451 ≈ −0,3348.
+> Ghép đủ bốn hàng thì S ≈ −1,3359. QBER dùng 495 cặp ở 45° / 45° và
+> 474 cặp ở 90° / 90°. Sau khi Bob đảo bit, các lượt vốn cùng dấu trở thành
+> lỗi. Hai hàng có 102 và 139 lỗi, nên QBER là 241 / 969 ≈ 24,87%.
+
+**3:30–3:45 · Nêu phạm vi.** Quay lại hai biểu đồ.
+
+> Hai lượt cho thấy nhiễu trong mô hình làm tương quan CHSH yếu đi và lỗi
+> tăng lên. Phần này chạy trong dashboard mô phỏng. Trong demo truyền tệp,
+> Alice và Bob có thể chọn BB84 hoặc E91 khi thiết lập hai máy.
+
+Nếu còn thời gian, đặt nhiễu `30%` và bấm so sánh lại. Với cùng số cặp và
+seed, khoảng 95% của |S| từ `1,2981` đến `2,5170` cắt qua mốc 2. Lượt này
+chưa đủ bằng chứng để kết luận tương quan vượt giới hạn cổ điển.
+
+## Kịch bản kết hợp BB84 hai máy và E91
+
+Kịch bản khoảng 8 phút, dành cho ba người. Nếu nhóm có hai người, người A
+kiêm C. Nếu có bốn người, giao tab E91 và phần kết cho người D.
+
+| Người | Máy | Thao tác và phụ trách lời thoại |
+|---|---|---|
+| A | Máy gửi | Mở đầu, điều khiển Alice, gửi tệp rồi gửi văn bản thử, đối chiếu mã phiên và chuyển phần. |
+| B | Máy nhận | Điều khiển Bob, chiếu hộp nhận và Terminal tạo khóa, đọc kết quả của hai phiên BB84. |
+| C | Máy gửi | Điều khiển Eve, chuyển sang tab E91, đọc hai biểu đồ và nhật ký từng lượt. |
+
+### Trước giờ chiếu
+
+- Chuẩn bị cùng bản mã nguồn và tạo `.venv` riêng trên mỗi máy. Kết nối cùng
+  LAN hoặc VPN riêng. A chuẩn bị một ảnh PNG nhỏ có tên `demo.png`.
+  Cài đặt và kiểm tra kết nối theo [hướng dẫn hai máy](NETWORK_DEMO.md#thiết-lập-alice-và-bob-trong-trình-duyệt).
+- A và B đều chạy `.\.venv\Scripts\python.exe -m bb84_lab.network setup --open`.
+  B tạo PSK hoặc dùng khóa đã có, rồi chuyển riêng đúng tệp đó cho A nhập.
+  B chọn **Bob** và giao thức **BB84**, nhập IPv4 và cổng `9100`, bấm **Khởi động Bob**.
+  A chọn **Alice** và **BB84**, nhập cùng IPv4 và cổng của Bob, chọn **Chạy kèm Eve trên
+  máy Alice**, bấm **Khởi động Alice và Eve**.
+- C mở **Bảng điều khiển Eve** trong tab riêng trên máy gửi, kiểm tra chế độ
+  **Chỉ chuyển tiếp**. Mở một PowerShell nữa trên máy gửi và chạy
+  `.\.venv\Scripts\python.exe -m bb84_lab.local --open`. Mở tab **E91** ở
+  `http://127.0.0.1:8765/#e91`. Chuẩn bị `4096` cặp, seed `2026` và nhiễu `50%`.
+- Tập chuyển nguồn chiếu giữa hai máy. Các trang Alice và Eve dùng
+  `http://127.0.0.1:8770` và `/eve` trên máy gửi. Bob mở `http://127.0.0.1:8770`
+  trên máy nhận. Giữ các tiến trình chạy, tránh hiện cửa sổ tệp PSK khi chiếu.
+
+### 0:00–0:45 · A mở đầu, C xác nhận Eve đang chuyển tiếp
+
+**Chiếu máy gửi.** A mở trang Alice. C chuyển nhanh sang tab Eve, chỉ vào
+chế độ **Chỉ chuyển tiếp**, rồi trả màn hình cho A.
+
+> **A** “Máy này chạy Alice và Eve. Máy còn lại chạy Bob. Alice gửi qua
+> Eve rồi Eve chuyển tiếp tới Bob. Lượt đầu Eve chỉ chuyển tiếp để nhóm
+> kiểm tra đường truyền BB84 trước khi bật can thiệp.”
+
+### 0:45–2:50 · A gửi tệp, B chiếu kết quả và log BB84
+
+**A** chọn `demo.png` rồi bấm **Gửi tệp**. Khi Alice báo hoàn tất,
+A đọc phần đầu mã phiên trong **Terminal tạo khóa** và nói “Mời Bob xác
+nhận tệp và mã phiên.” **Chuyển chiếu sang máy nhận.**
+
+**B** mở **Bob đã nhận**, chỉ vào tệp mới và SHA-256 đã khớp. Sau đó cuộn
+lên **Terminal tạo khóa**, đối chiếu mã phiên rồi bấm **Xem log chi tiết**.
+Chọn lần lượt **BB84**, **Cascade**, **Toeplitz**. Chỉ một bước đại diện
+trong mỗi mục. Trong tóm tắt, chỉ QBER và mốc xác nhận khóa ứng dụng.
+
+> **B** “Bob đã nhận và kiểm tra tệp. Mã phiên trùng với Alice. BB84 giữ
+> tín hiệu cùng cơ sở, lấy mẫu để tính QBER rồi loại các bit mẫu. Cascade
+> so parity để đối soát. Toeplitz rút ngắn chuỗi đã đối soát trước khi
+> hai bên xác nhận khóa ứng dụng. Log hiện các phép tính và kết quả kiểm tra.”
+
+B đọc **QBER và số bit đang hiện**, vì các phiên mạng lấy bit và cơ sở ngẫu
+nhiên. B có thể bấm **Sao chép tóm tắt** trước khi chạy lượt tiếp theo.
+B nói “Mời Eve bật can thiệp cho lượt mới.”
+
+### 2:50–4:10 · C bật can thiệp, A gửi lại, B đọc bước dừng
+
+**Chiếu máy gửi.** C vào Eve, chọn **Chặn–đo–gửi lại**, đặt tỷ lệ `1`,
+bấm **Áp dụng chế độ**, rồi đợi trạng thái cập nhật. A trở về Alice và gửi
+văn bản `Lượt thử có Eve` bằng **Gửi văn bản**.
+
+> **C** “Lượt này Eve chặn–đo–gửi lại toàn bộ tín hiệu mô phỏng. Khi không
+> có nhiễu nền, QBER kỳ vọng khoảng 25%. Nhóm sẽ đọc số đo và quyết định
+> của phiên vừa chạy.”
+
+**Chuyển chiếu sang máy nhận.** B kiểm tra **mã phiên mới**, đọc QBER và
+quyết định giám sát trong **Terminal tạo khóa**. Khi phiên dừng ở QBER,
+chỉ vào bước dừng và xác nhận văn bản mới chưa xuất hiện ở **Bob đã nhận**.
+Tệp `demo.png` thuộc lượt đầu vẫn có trong hộp nhận.
+
+> **B** “Log cho thấy phiên mới dừng ở QBER, trước Cascade, Toeplitz và
+> truyền dữ liệu. Giờ mời C chuyển sang E91 để xem thêm thước đo tương
+> quan CHSH trên mô hình cặp vướng víu.”
+
+### 4:10–5:35 · C chạy E91 và chiếu hai biểu đồ
+
+**Chuyển chiếu về máy gửi.** C mở tab **E91**, chỉ vào `4096` cặp, seed
+`2026`, nhiễu `50%`, rồi bấm **So sánh lý tưởng và có nhiễu**. Chỉ vạch
+đứt ở 2 và khoảng 95% dưới hai thanh CHSH, sau đó chỉ hai thanh QBER.
+
+> **C** “Hai lượt E91 dùng cùng số cặp và seed. Lượt lý tưởng có |S| khoảng
+> 2,83, với cả khoảng 95% nằm trên mốc cổ điển 2. Lượt nhiễu 50% có |S|
+> khoảng 1,34, với cả khoảng nằm dưới 2. Trên các cặp đo cùng hướng, QBER
+> tăng từ 0% lên 24,87%.”
+
+### 5:35–7:40 · C mở hai nhật ký, A kết thúc
+
+1. C bấm **Xem nhật ký lý tưởng**. Chỉ nhãn `0%`, hàng `0° / 45°` và dòng
+   ghép bốn tương quan trong **Nhật ký tính CHSH**.
+
+   > **C** “Hàng đầu tính (29 + 25 − 196 − 201) / 451 ≈ −0,7605.
+   > Ghép bốn hệ số theo dấu cộng, trừ, cộng, cộng cho S ≈ −2,8313.
+   > Biểu đồ lấy trị tuyệt đối. QBER của lượt này là 0 trên 969 cặp.”
+
+2. C cuộn lên và bấm **Xem nhật ký có nhiễu**. Chỉ nhãn `50%`, kết quả
+   `S ≈ −1,3359` và hai hàng trong **Nhật ký tính QBER**.
+
+   > **C** “QBER dùng hai nhóm đo cùng hướng. Sau khi Bob đảo bit, các
+   > lượt vốn cùng dấu được tính là lỗi. Hai nhóm có 102 và 139 lỗi.
+   > Cộng lại là 241 lỗi trên 495 + 474 = 969 cặp, tức 24,87%.”
+
+3. C cuộn lên hai biểu đồ và nhường lời cho A.
+
+   > **A** “Lượt truyền tệp vừa rồi dùng BB84. Tab E91 minh họa phép đo để
+   > đối chiếu CHSH và QBER khi tăng nhiễu. Nhóm cũng có thể chọn E91 ở cả
+   > hai máy để thử thiết lập khóa theo E91 và truyền tệp.”
+
+Nếu đường truyền hai máy chưa sẵn sàng, dùng tab **Mô phỏng** để trình bày
+BB84 với **Kênh sạch** và **Eve toàn phần**, rồi chuyển sang E91 ở mốc 4:10.
+Nêu rõ lúc đó phần BB84 đang chạy cục bộ. Nếu phiên mạng có kết quả khác
+dự kiến, đọc trạng thái thực tế trước khi xác nhận bước dừng.
+
+### Phương án thay lượt BB84 mạng bằng E91 mạng
+
+1. Trong Setup, A và B cùng chọn **E91**, dùng lại PSK. B khởi động Bob
+   trước. A chọn **Chạy kèm Eve trên máy Alice** rồi khởi động Alice và Eve.
+2. C giữ **Chỉ chuyển tiếp**. A bấm **Gửi tệp**. B xem **Bob đã nhận** và mở
+   **Terminal tạo khóa → Xem log chi tiết → E91**. Đọc `|S|`, khoảng 95%
+   và QBER của chính phiên. Nếu cận dưới `|S|` vượt 2 và QBER đạt điều
+   kiện, phiên tiếp tục qua Cascade, Toeplitz và truyền tệp.
+3. C chọn **Làm mất tương quan**, đặt tỷ lệ `1` rồi bấm **Áp dụng chế độ**.
+   A gửi lại bằng **Gửi văn bản**. B chỉ mã phiên mới, QBER và kết luận
+   CHSH. Khi CHSH chặn phiên, **Bob đã nhận** giữ tệp cũ và không hiện nội
+   dung mới. Sau đó C dùng tab E91 cục bộ để chiếu hai lượt có cùng seed.
 
 ## Phương án CLI nếu cần trình bày qua terminal
 

@@ -8,7 +8,8 @@ def check_project_structure():
     import importlib
 
     modules = (
-        "bb84_lab.local.server", "bb84_lab.core.bb84", "bb84_lab.simulation.session", "bb84_lab.core.postprocess",
+        "bb84_lab.local.server", "bb84_lab.core.bb84", "bb84_lab.core.e91",
+        "bb84_lab.simulation.session", "bb84_lab.core.postprocess",
         "bb84_lab.core.secure_channel", "bb84_lab.research.analysis", "bb84_lab.simulation.education",
         "bb84_lab.research.experiments", "bb84_lab.research.study",
         "bb84_lab.research.plot_results", "bb84_lab.research.verify_quantum",
@@ -30,7 +31,8 @@ def check_project_structure():
     from bb84_lab.shared.paths import PROJECT_ROOT, WEB_ROOT, CONFIG_ROOT, OUTPUT_ROOT
     assert PROJECT_ROOT == root and WEB_ROOT == root / "web"
     assert CONFIG_ROOT == root / "configs" and OUTPUT_ROOT == root / "outputs"
-    for relative in ("web/simulation/index.html", "web/simulation/app.js", "web/simulation/education.js", "web/shared/styles.css",
+    for relative in ("web/simulation/index.html", "web/simulation/app.js", "web/simulation/education.js",
+                     "web/simulation/e91.js", "web/simulation/e91.css", "web/shared/styles.css",
                      "configs/smoke.json", "configs/main.json", "configs/study.json",
                      "web/network/index.html", "web/network/app.js", "web/network/styles.css",
                      "docs/NETWORK_DEMO.md", "docs/DEMO.md", "docs/de_cuong_QKD_3_tuan.md"):

@@ -8,7 +8,8 @@ import secrets
 import socket
 
 from bb84_lab.core.secure_channel import AuthenticationError, _json_bytes
-from bb84_lab.network.config import CHUNK_BYTES, DEFAULT_MAX_FILE_BYTES, network_config, public_config
+from bb84_lab.network.config import CHUNK_BYTES, DEFAULT_E91_SIGNALS, DEFAULT_MAX_FILE_BYTES, PROTOCOLS, network_config, public_config
+from bb84_lab.network.e91_session import prepare_e91_alice_channel, prepare_e91_bob_channel
 from bb84_lab.network.key_trace import begin_trace, trace_step
 from bb84_lab.network.packets import receive_encrypted, send_encrypted
 from bb84_lab.network.session import hello_alice, hello_bob, prepare_alice_channel, prepare_bob_channel
@@ -34,12 +35,17 @@ def _hash_file(path):
 
 
 def send_transfer(target, psk, path, name=None, kind="file", config=None, event=lambda *a, **k: None,
-                  max_bytes=DEFAULT_MAX_FILE_BYTES, *, record_details=None):
+                  max_bytes=DEFAULT_MAX_FILE_BYTES, *, record_details=None, protocol="bb84"):
     path = Path(path)
     size = path.stat().st_size
     if size > max_bytes or kind not in ("file", "text") or (kind == "text" and size > 16384):
         raise ValueError("Tệp vượt giới hạn hoặc loại không hợp lệ")
-    config = network_config() if config is None else network_config(public_config(config))
+    if protocol not in PROTOCOLS:
+        raise ValueError("Giao thức mạng phải là BB84 hoặc E91")
+    if config is None and protocol == "e91":
+        config = network_config({"signals": DEFAULT_E91_SIGNALS})
+    else:
+        config = network_config() if config is None else network_config(public_config(config))
     digest = _hash_file(path)
     event("connecting", "Đang kết nối tới đầu nhận/proxy")
     with socket.create_connection(target, timeout=15) as connection:
@@ -47,7 +53,8 @@ def send_transfer(target, psk, path, name=None, kind="file", config=None, event=
         peer = hello_alice(connection, psk)
         begin_trace(event, peer.session_id)
         try:
-            channel, stats = prepare_alice_channel(peer, config, event, record_details=record_details)
+            prepare = prepare_e91_alice_channel if protocol == "e91" else prepare_alice_channel
+            channel, stats = prepare(peer, config, event, record_details=record_details)
             if channel is None:
                 event("aborted", "Phiên dừng trước mã hóa", **stats)
                 return {"state": "aborted", "statistics": stats}
@@ -76,15 +83,19 @@ def send_transfer(target, psk, path, name=None, kind="file", config=None, event=
 
 
 def receive_transfer(connection, psk, inbox, event=lambda *a, **k: None,
-                     max_bytes=DEFAULT_MAX_FILE_BYTES, noise=0, completed=lambda item: None, *, record_details=None):
+                     max_bytes=DEFAULT_MAX_FILE_BYTES, noise=0, completed=lambda item: None, *,
+                     record_details=None, protocol="bb84"):
     if type(noise) not in (int, float) or not 0 <= noise <= 1:
         raise ValueError("Nhiễu phải nằm trong [0,1]")
+    if protocol not in PROTOCOLS:
+        raise ValueError("Giao thức mạng phải là BB84 hoặc E91")
     configure_socket(connection)
     peer = hello_bob(connection, psk)
     begin_trace(event, peer.session_id)
     temporary = None
     try:
-        channel, stats = prepare_bob_channel(peer, event, noise, record_details=record_details)
+        prepare = prepare_e91_bob_channel if protocol == "e91" else prepare_bob_channel
+        channel, stats = prepare(peer, event, noise, record_details=record_details)
         if channel is None:
             event("aborted", "Phiên dừng trước mã hóa", **stats)
             return None

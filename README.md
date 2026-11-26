@@ -1,6 +1,6 @@
 # BB84 Lab
 
-Classical BB84 simulation, QBER monitoring, educational key postprocessing, and an Alice–Bob–Eve file-transfer demonstration.
+Classical BB84 and E91 simulations, QBER and CHSH monitoring, educational key postprocessing, and an Alice–Eve–Bob file-transfer demonstration.
 
 [Tiếng Việt](README.vi.md) · [Research model](docs/RESEARCH.md) · [Network guide](docs/NETWORK_DEMO.md) · [Contributing](CONTRIBUTING.md)
 
@@ -21,7 +21,7 @@ The lab models these steps with classical randomness. For intercept fraction `f`
 | BB84/QBER | Seeded Monte Carlo, basis sifting, sample removal, Wilson 95% interval, `continue` / `anomalous` / `inconclusive` decisions |
 | Key processing | Educational four-pass Cascade with lookback, SHA-256 confirmation, Toeplitz hashing, disclosure/entropy budget, abort on failure |
 | Cryptography | HMAC-SHA256 discussion authentication, HKDF context binding, `cryptography` ChaCha20-Poly1305, nonce counters, tamper/replay rejection |
-| Simulation dashboard | Vietnamese UI, scenarios, 16-signal lesson, packet inspector, public verification JSON/CSV, completed-study viewer |
+| Simulation dashboard | Vietnamese UI, BB84 scenarios and 16-signal lesson, E91 with CHSH and QBER calculations, packet inspector, public verification JSON/CSV, completed-study viewer |
 | Independent peers | Alice/Bob processes and optional PSK-free Eve proxy, six proxy modes, role dashboards on loopback |
 | File transfer | Text/arbitrary files, 64 KiB chunks, 512 MiB default limit, authenticated completion, size/SHA-256 checks, HTTP Range playback/download |
 | Research | Separate calibration/held-out seeds, frozen sampling selection, paired bootstrap, measured postprocessing, five PNG/SVG plot groups, optional Qiskit/Aer checks |
@@ -84,6 +84,8 @@ The CLI emits public JSON statistics, postprocessing status and encryption check
 
 A valid JSON result can describe an aborted session with exit code 0: inspect its status. `--tamper-transcript` causes authentication failure and exit code 2. The standalone `aead` command uses an OS-generated random key rather than a BB84 key. See the [model/budget details](docs/RESEARCH.md) and [5–7 minute demo](docs/DEMO.md).
 
+In the local dashboard, open **E91**, set the pair count, seed, and white-noise level, then select **So sánh lý tưởng và có nhiễu** (compare ideal and noisy). The side-by-side charts show observed `|S|` and QBER for both runs with the same pair count and seed. Select **Xem nhật ký lý tưởng** or **Xem nhật ký có nhiễu** to see outcome counts, formulas with observed numbers substituted, and 95% intervals. [E91 model and assumptions](docs/RESEARCH.md#mô-phỏng-e91)
+
 ## Run Alice, Bob and Eve
 
 For a direct demo, connect two machines to the same LAN or private VPN. Start setup from the project root on each machine.
@@ -92,15 +94,15 @@ For a direct demo, connect two machines to the same LAN or private VPN. Start se
 python -m bb84_lab.network setup --open
 ```
 
-Each machine opens its own page at `http://127.0.0.1:8770`. On one machine, select **Tạo PSK** (create PSK) or use its existing PSK. Copy the file shown on the page to the other machine over a private channel and select **Nhập tệp PSK** (import PSK) there. The default file is `outputs/network/auth.key`. Start Bob with the IPv4 address of the receiving machine, then start Alice with that same address and TCP port `9100`. Use `Ctrl+C` and relaunch setup to change the role or address. [Network demo guide](docs/NETWORK_DEMO.md)
+Each machine opens its own page at `http://127.0.0.1:8770`. On one machine, select **Tạo PSK** (create PSK) or use its existing PSK. Copy the file shown on the page to the other machine over a private channel and select **Nhập tệp PSK** (import PSK) there. The default file is `outputs/network/auth.key`. In **Giao thức tạo khóa** (key agreement protocol), select the same **BB84** or **E91** on both machines. Start Bob with the IPv4 address of the receiving machine, then start Alice with that same address and TCP port `9100`. To switch protocols, use `Ctrl+C` and relaunch setup on both machines. [Network demo guide](docs/NETWORK_DEMO.md)
 
 To include Eve on Alice's machine, select **Chạy kèm Eve trên máy Alice** on the Alice setup form. Keep Bob's IPv4 address and port in the form, then select **Khởi động Alice và Eve**. Open **Bảng điều khiển Eve** (Eve dashboard) from Alice's dashboard and select a mode for the next transfer. Eve listens locally on Alice's machine and takes no PSK. [Run Eve from browser setup](docs/NETWORK_DEMO.md#chạy-eve-ngay-trên-máy-alice)
 
-On Alice or Bob, use **Terminal tạo khóa** (key session terminal) to follow the current or latest transfer. Select **Xem log chi tiết** (show detailed log) to browse the public BB84 bases and disclosed samples, the Cascade parity queries, and the public Toeplitz coefficients used in that session. Bob also shows Cascade splits, corrections, and rechecks. Compare the session ID on both machines to match the two traces. The trace stays in memory and keeps the PSK, session key, and private bit strings out of the log.
+On Alice or Bob, use **Terminal tạo khóa → Xem log chi tiết** to follow the current or latest transfer. BB84 shows sifting and QBER. E91 shows CHSH and QBER, and requires both checks to pass before using the shared Cascade, Toeplitz, and ChaCha20-Poly1305 pipeline. Compare the session ID on both machines to match the two traces. The trace stays in memory and keeps the PSK, session key, and private bit strings out of the log. [Session and log guide](docs/NETWORK_DEMO.md#xem-log-của-phiên-truyền)
 
 Open **Tạo khóa từng bước** (key generation step by step) to work through the full multiplication with the input and output bits of a public teaching example.
 
-To run all three roles as separate processes on one machine, open three terminals using the same virtual environment. Run `init` once to create a 32-byte PSK file. The command preserves any existing file.
+The command-line example below runs the three BB84 roles as separate processes on one machine. Open three terminals using the same virtual environment. Run `init` once to create a 32-byte PSK file. The command preserves any existing file.
 
 ```sh
 python -m bb84_lab.network init --psk-file outputs/network/auth.key

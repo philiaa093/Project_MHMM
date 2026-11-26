@@ -10,6 +10,7 @@ const importKey = document.querySelector("#setup-import-psk");
 const keyFile = document.querySelector("#setup-psk-file");
 const roleForm = document.querySelector("#setup-role-form");
 const roleOptions = document.querySelector("#setup-role-options");
+const protocolOptions = document.querySelector("#setup-protocol-options");
 const host = document.querySelector("#setup-host");
 const hostLabel = document.querySelector("#setup-host-label");
 const hostHelp = document.querySelector("#setup-host-help");
@@ -60,14 +61,16 @@ function render() {
     active.hidden = !setup.role;
     activeEve.hidden = !setup.eve_enabled;
     if (setup.role) {
-      activeRole.textContent = setup.eve_enabled ? "Alice và Eve đang chạy trên máy này."
-        : `${roleName(setup.role)} đang chạy trên máy này.`;
+      const name = setup.eve_enabled ? "Alice và Eve" : roleName(setup.role);
+      const protocol = setup.protocol === "e91" ? "E91" : "BB84";
+      activeRole.textContent = `${name} đang chạy ${protocol} trên máy này.`;
     }
   }
 
   createKey.disabled = pending;
   importKey.disabled = pending;
   roleOptions.disabled = !setup || pending;
+  protocolOptions.disabled = !setup || pending;
   host.disabled = !setup || pending;
   port.disabled = !setup || pending;
   eveOption.hidden = !alice;
@@ -157,7 +160,7 @@ roleForm.addEventListener("submit", (event) => {
     host.focus();
     return;
   }
-  const payload = { role, host: address, port: listenPort };
+  const payload = { role, host: address, port: listenPort, protocol: roleForm.elements.protocol.value };
   if (role === "alice" && eve.checked) payload.eve = true;
   submit("/api/setup/start", postOptions("application/json", JSON.stringify(payload)), {
     feedback: roleFeedback,

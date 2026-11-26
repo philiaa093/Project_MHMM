@@ -33,6 +33,10 @@ def read_trace_page(ui, session_id, stage, offset):
     return page
 
 
+def post(ui, route, data):
+    return http(ui, route, json.dumps(data).encode("utf-8"), {"Content-Type": "application/json"})
+
+
 def check_browser_setup(root, idle):
     import socket
     from bb84_lab.network.config import network_config
@@ -49,12 +53,6 @@ def check_browser_setup(root, idle):
     for server in servers:
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
-    def post(ui, route, data, origin=None):
-        headers = {"Content-Type": "application/json"}
-        if origin:
-            headers["Origin"] = origin
-        return http(ui, route, json.dumps(data).encode("utf-8"), headers)
-
     start = "/api/setup/start"
     create = "/api/setup/psk"
     load = "/api/setup/psk-import"
@@ -67,8 +65,11 @@ def check_browser_setup(root, idle):
         assert http(bob_ui, "/api/state")[0] == 409
         for page in ("/setup", "/setup.js", "/setup.css", "/key-lesson", "/key-lesson.js", "/key-lesson.css"):
             assert http(bob_ui, page)[0] == 200, page
-        assert post(bob_ui, create, {}, "https://evil.example")[0] == 403
-        assert http(bob_ui, create, b"{}", {"Host": "evil.example", "Content-Type": "application/json"})[0] == 403
+        # Origin and Host reject before body parsing. An empty body avoids a
+        # close with unread request bytes on Windows.
+        foreign_origin = {"Origin": "https://evil.example"}
+        assert http(bob_ui, create, b"", foreign_origin)[0] == 403
+        assert http(bob_ui, create, b"", {"Host": "evil.example"})[0] == 403
         assert not bob_key.exists()
 
         invalid_address = {"role": "bob", "host": "0.0.0.0", "port": 9100}
@@ -82,7 +83,7 @@ def check_browser_setup(root, idle):
         assert json.loads(response)["psk_ready"] and secret.hex().encode() not in response
         assert post(bob_ui, create, {})[0] == 409 and bob_key.read_bytes() == secret
         assert http(alice_ui, load, secret[:-1], binary)[0] == 400 and not alice_key.exists()
-        assert http(alice_ui, load, secret, {**binary, "Origin": "https://evil.example"})[0] == 403
+        assert http(alice_ui, load, b"", {**binary, **foreign_origin})[0] == 403
         assert http(alice_ui, load, secret, binary)[0] == 200 and alice_key.read_bytes() == secret
         assert http(alice_ui, load, bytes(32), binary)[0] == 409 and alice_key.read_bytes() == secret
 
@@ -114,7 +115,7 @@ def check_browser_setup(root, idle):
         assert eve["listen"][0] == "127.0.0.1" and eve["listen"][1] != role_params["port"]
         assert eve["target"] == ["127.0.0.1", role_params["port"]]
         assert "key_trace" not in eve and secret.hex().encode() not in response
-        assert post(alice_ui, eve_attack, intercept, "https://evil.example")[0] == 403
+        assert http(alice_ui, eve_attack, b"", foreign_origin)[0] == 403
         for server in servers:
             assert json.loads(http(server, "/api/state")[2])["key_trace"]["steps"] == []
 
@@ -126,6 +127,7 @@ def check_browser_setup(root, idle):
         status, _, state = http(bob_ui, "/api/state")
         snapshot = json.loads(state)
         assert status == 200 and snapshot["setup_available"]
+        assert snapshot["protocol"] == "bb84"
         assert snapshot["state"] == "complete" and snapshot["received"][-1]["text"] == message
 
         alice_snapshot = json.loads(http(alice_ui, "/api/state")[2])
@@ -229,6 +231,92 @@ def check_browser_setup(root, idle):
             server.server_close()
         bob.close()
         alice.close()
+
+
+def check_browser_e91(root, idle):
+    import socket
+    from bb84_lab.network.setup import NetworkSetup
+    from bb84_lab.network.transfer import send_transfer
+    from bb84_lab.network.ui import make_ui_server
+
+    # Independent launchers share only the authentication file's contents.
+    alice_key, bob_key = root / "e91-alice.key", root / "e91-bob.key"
+    psk = secrets.token_bytes(32)
+    alice_key.write_bytes(psk)
+    bob_key.write_bytes(psk)
+    alice, bob = NetworkSetup(alice_key), NetworkSetup(bob_key, root / "e91-inbox")
+    alice_ui, bob_ui = [make_ui_server(port=0, launcher=launcher) for launcher in (alice, bob)]
+    servers = alice_ui, bob_ui
+    threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in servers]
+    for thread in threads:
+        thread.start()
+
+    start = "/api/setup/start"
+    with socket.socket() as port_probe:
+        port_probe.bind(("127.0.0.1", 0))
+        port = port_probe.getsockname()[1]
+    target = {"host": "127.0.0.1", "port": port, "protocol": "e91"}
+    try:
+        assert post(bob_ui, start, {**target, "role": "bob", "protocol": "other"})[0] == 400
+        for role, ui, settings in (("bob", bob_ui, {}), ("alice", alice_ui, {"eve": True})):
+            status, _, body = post(ui, start, {**target, **settings, "role": role})
+            assert status == 200 and json.loads(body)["protocol"] == "e91"
+            assert json.loads(http(ui, "/api/state")[2])["protocol"] == "e91"
+        eve = json.loads(http(alice_ui, "/api/eve/state")[2])
+        assert eve["protocol"] == "e91" and eve["mode"] == "pass" and "key_trace" not in eve
+
+        binary = bytes(range(256)) * 257
+        upload = {"Content-Type": "application/octet-stream", "X-Filename": "e91.bin"}
+        status, _, response = http(alice_ui, "/api/upload", binary, upload)
+        assert status == 202 and json.loads(response)["accepted"]
+        for node in (alice.node, bob.node, alice.eve):
+            idle(node)
+
+        accepted = json.loads(http(bob_ui, "/api/state")[2])
+        session = accepted["statistics"]["session_id"]
+        item, = accepted["received"]
+        assert item["sha256"] == hashlib.sha256(binary).hexdigest()
+        assert http(bob_ui, f"/api/download/{item['id']}")[2] == binary
+        for ui in (alice_ui, bob_ui):
+            state = json.loads(http(ui, "/api/state")[2])
+            stats, trace = state["statistics"], state["key_trace"]
+            bell = stats["bell"]
+            assert state["state"] == "complete" and stats["session_id"] == trace["session_id"] == session
+            assert bell["status"] == "violation" and bell["ci_low"] > 2
+            assert len(bell["pairs"]) == 4 and stats["sample_errors"] == 0
+            assert stats["sifted_bits"] == stats["sample_count"] + stats["retained_bits"]
+            assert stats["output_bits"] >= 256
+            assert {step["stage"] for step in trace["steps"]} >= {"e91", "cascade", "toeplitz"}
+            rows = read_trace_page(ui, session, "e91", 0)["steps"]
+            assert rows and "CHSH" in json.dumps(rows, ensure_ascii=False)
+            assert psk.hex() not in json.dumps(trace)
+
+        assert post(alice_ui, "/api/eve/attack", {"mode": "intercept", "fraction": 1})[0] == 200
+        assert http(alice_ui, "/api/upload", binary, upload)[0] == 202
+        for node in (alice.node, bob.node, alice.eve):
+            idle(node)
+        blocked = json.loads(http(bob_ui, "/api/state")[2])
+        assert blocked["state"] == "aborted" and blocked["received"] == [item]
+        assert blocked["statistics"]["bell"]["status"] != "violation"
+        assert {step["stage"] for step in blocked["key_trace"]["steps"]}.isdisjoint({"cascade", "toeplitz"})
+        assert any(entry["code"] == "attack" for entry in json.loads(http(alice_ui, "/api/eve/state")[2])["events"])
+
+        # BB84 is the standalone sender's default, and Bob is still set to E91.
+        source = root / "protocol-mismatch.bin"
+        source.write_bytes(binary)
+        rejected(lambda: send_transfer(("127.0.0.1", port), psk, source), (ValueError, OSError))
+        idle(bob.node)
+        failed = json.loads(http(bob_ui, "/api/state")[2])
+        assert failed["state"] == "failed" and failed["received"] == [item]
+        assert not list((root / "e91-inbox").glob("*.part"))
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=5)
+        alice.close()
+        bob.close()
 
 
 def check_network():
@@ -359,8 +447,7 @@ def check_network():
             idle(eve)
             assert alice.snapshot()["state"] == "complete"
             assert Path(bob._received[-1]["path"]).read_bytes() == contents
-            assert http(alice_ui, "/api/send-text", b'{"message":"hello"}',
-                        {"Content-Type": "application/json", "Origin": "https://evil.example"})[0] == 403
+            assert http(alice_ui, "/api/send-text", b"", {"Origin": "https://evil.example"})[0] == 403
             snapshot = json.dumps(bob.snapshot())
             assert psk.hex() not in snapshot
             assert not {"psk", "alice_bits", "bob_bits", "key", "sample_alice_bits"} & bob.snapshot().keys()
@@ -381,6 +468,7 @@ def check_network():
             for thread in threads:
                 thread.join(timeout=5)
         check_browser_setup(root, idle)
+        check_browser_e91(root, idle)
 
     for raw in (struct.pack("!I", MAX_FRAME_BYTES + 1),
                 struct.pack("!I", 13) + b'{"x":1,"x":2}'):

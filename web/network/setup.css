@@ -54,6 +54,7 @@
 .setup-role-choice input { flex: 0 0 auto; margin: 0; accent-color: var(--blue); }
 .setup-role-choice strong, .setup-role-choice small { display: block; }
 .setup-role-choice small { color: var(--muted); font-weight: 400; }
+.setup-protocol-help { margin-top: 7px; }
 .setup-address { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 114px); gap: 11px; }
 .setup-address input[type=text] {
   display: block;

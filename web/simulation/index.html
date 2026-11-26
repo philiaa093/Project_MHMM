@@ -4,11 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#edf1f7">
-  <meta name="description" content="Chạy kịch bản BB84, quan sát QBER và kiểm chứng mã hóa thông điệp bằng ChaCha20-Poly1305.">
+  <meta name="description" content="Mô phỏng BB84 và E91, theo dõi QBER, kiểm tra Bell–CHSH và kiểm chứng mã hóa ChaCha20-Poly1305.">
   <title>BB84 Lab · Trao đổi khóa và mã hóa</title>
   <link rel="stylesheet" href="/shared/styles.css">
+  <link rel="stylesheet" href="/e91.css">
   <script src="/app.js" defer></script>
   <script src="/education.js" defer></script>
+  <script src="/e91.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Đến nội dung chính</a>
@@ -20,6 +22,7 @@
     <nav class="main-nav" aria-label="Điều hướng chính">
       <a class="nav-link active" data-view="simulation" href="#simulation" aria-current="page">Mô phỏng</a>
       <a class="nav-link" data-view="lesson" href="#lesson">BB84 từng bước</a>
+      <a class="nav-link" data-view="e91" href="#e91">E91</a>
       <a class="nav-link" data-view="packet" href="#packet">Mã hóa</a>
       <a class="nav-link" data-view="experiments" href="#experiments">Thí nghiệm</a>
       <a class="nav-link" data-view="about" href="#about">Giới thiệu</a>
@@ -158,6 +161,162 @@
       </div>
     </section>
 
+    <section id="view-e91" class="view" aria-labelledby="e91-title" hidden>
+      <div class="page-heading">
+        <div>
+          <h1 id="e91-title">E91 và kiểm định Bell</h1>
+          <p class="page-description">Mô phỏng phép đo trên hai đầu của một cặp singlet. Theo dõi cách tương quan CHSH và tỷ lệ lỗi QBER thay đổi khi tăng nhiễu.</p>
+        </div>
+      </div>
+      <div class="scope-banner"><p><strong>Mô phỏng cổ điển.</strong> Góc biểu thị hướng đo spin trong cùng một mặt phẳng. Kết quả dùng để minh họa thống kê. Để gửi tệp giữa hai máy bằng E91, chọn giao thức trong Setup mạng.</p></div>
+
+      <div class="e91-layout">
+        <section class="controls-panel" aria-labelledby="e91-config-title">
+          <div class="panel-heading"><h2 id="e91-config-title">Cấu hình nguồn cặp</h2></div>
+          <form id="e91-form">
+            <fieldset id="e91-parameters" class="e91-fieldset">
+              <legend class="sr-only">Tham số mô phỏng E91</legend>
+              <fieldset class="e91-fieldset e91-mode">
+                <legend>Chế độ</legend>
+                <div class="e91-options">
+                  <label><input id="e91-ideal" type="radio" name="e91-mode" value="ideal" checked><span>Lý tưởng</span></label>
+                  <label><input id="e91-noisy" type="radio" name="e91-mode" value="noisy"><span>Có nhiễu</span></label>
+                </div>
+              </fieldset>
+              <div class="form-row" id="e91-noise-row">
+                <div class="label-line">
+                  <label for="e91-noise">Xác suất nhiễu trắng</label>
+                  <output id="e91-noise-value" for="e91-noise">50%</output>
+                </div>
+                <input id="e91-noise" name="noise_probability" type="range" min="0" max="1" step="0.01" value="0.50" aria-describedby="e91-noise-help">
+                <div class="range-captions"><span>0%</span><span>100%</span></div>
+                <p id="e91-noise-help" class="input-help">Mức này dùng cho lượt có nhiễu và khi so sánh hai lượt. Lượt lý tưởng lấy mức 0%.</p>
+              </div>
+              <div class="two-columns">
+                <div class="form-row">
+                  <label for="e91-signals">Số cặp N</label>
+                  <input id="e91-signals" name="signals" type="number" min="1" max="65536" step="1" value="4096" required>
+                </div>
+                <div class="form-row">
+                  <label for="e91-seed">Seed</label>
+                  <input id="e91-seed" name="seed" type="number" min="0" max="2147483647" step="1" value="2026" required>
+                </div>
+              </div>
+            </fieldset>
+            <button type="submit" id="e91-run" class="button primary"><span class="button-label">Chạy mô phỏng E91</span><span class="button-spinner" aria-hidden="true"></span></button>
+            <button type="button" id="e91-compare" class="button secondary" aria-controls="e91-comparison-result"><span class="button-label">So sánh lý tưởng và có nhiễu</span><span class="button-spinner" aria-hidden="true"></span></button>
+          </form>
+          <p id="e91-error" class="error-message" role="alert" hidden></p>
+        </section>
+
+        <div id="e91-results" class="e91-results" aria-busy="false">
+          <section class="e91-readout" aria-labelledby="e91-readout-title">
+            <h2 id="e91-readout-title">Kết quả phép đo</h2>
+            <dl class="e91-axes">
+              <div><dt>Alice</dt><dd>0° · 45° · 90°</dd></div>
+              <div><dt>Bob</dt><dd>45° · 90° · 135°</dd></div>
+            </dl>
+            <p id="e91-context" class="e91-context" role="status">Chạy mô phỏng để xem kết quả.</p>
+            <div id="e91-summary" class="e91-summary" hidden>
+              <section>
+                <h3>CHSH</h3>
+                <p class="e91-stat"><span>|S|</span> <strong id="e91-s"></strong></p>
+                <p id="e91-s-expected" class="e91-stat-note"></p>
+                <p id="e91-s-ci" class="e91-stat-note"></p>
+                <p id="e91-s-status" class="e91-s-status"></p>
+              </section>
+              <section>
+                <h3>QBER trên cặp dùng cho khóa</h3>
+                <p class="e91-stat"><strong id="e91-qber"></strong></p>
+                <p id="e91-qber-expected" class="e91-stat-note"></p>
+                <p id="e91-qber-ci" class="e91-stat-note"></p>
+              </section>
+            </div>
+            <p id="e91-counts" class="e91-counts" hidden></p>
+          </section>
+        </div>
+      </div>
+
+      <section class="card e91-comparison" aria-labelledby="e91-comparison-title">
+        <div class="e91-comparison-heading">
+          <h2 id="e91-comparison-title">Lý tưởng và có nhiễu</h2>
+          <p id="e91-comparison-context" class="e91-context" role="status" tabindex="-1">Bấm So sánh lý tưởng và có nhiễu để chạy hai lượt với cùng số cặp và seed.</p>
+          <p id="e91-comparison-error" class="error-message" role="alert" hidden></p>
+        </div>
+        <div id="e91-comparison-result" class="e91-comparison-charts" hidden>
+          <figure class="e91-comparison-chart e91-comparison-chsh" aria-labelledby="e91-compare-s-title">
+            <h3 id="e91-compare-s-title">CHSH |S|</h3>
+            <div class="e91-comparison-row">
+              <div><span id="e91-compare-s-ideal-label">Lý tưởng</span><strong id="e91-compare-s-ideal-value">—</strong></div>
+              <div class="e91-comparison-track"><meter id="e91-compare-s-ideal" min="0" max="4" value="0" aria-labelledby="e91-compare-s-title e91-compare-s-ideal-label" aria-describedby="e91-compare-s-ideal-note"></meter></div>
+              <p id="e91-compare-s-ideal-note" class="e91-comparison-note"></p>
+            </div>
+            <div class="e91-comparison-row e91-comparison-noisy">
+              <div><span id="e91-compare-s-noisy-label">Có nhiễu</span><strong id="e91-compare-s-noisy-value">—</strong></div>
+              <div class="e91-comparison-track"><meter id="e91-compare-s-noisy" min="0" max="4" value="0" aria-labelledby="e91-compare-s-title e91-compare-s-noisy-label" aria-describedby="e91-compare-s-noisy-note"></meter></div>
+              <p id="e91-compare-s-noisy-note" class="e91-comparison-note"></p>
+            </div>
+            <div class="e91-comparison-axis" aria-hidden="true"><span>0</span><span>2</span><span>4</span></div>
+            <figcaption>Vạch đứt đánh dấu giới hạn CHSH cổ điển |S| = 2.</figcaption>
+          </figure>
+          <figure class="e91-comparison-chart" aria-labelledby="e91-compare-qber-title">
+            <h3 id="e91-compare-qber-title">QBER</h3>
+            <div class="e91-comparison-row">
+              <div><span id="e91-compare-qber-ideal-label">Lý tưởng</span><strong id="e91-compare-qber-ideal-value">—</strong></div>
+              <div class="e91-comparison-track"><meter id="e91-compare-qber-ideal" min="0" max="1" value="0" aria-labelledby="e91-compare-qber-title e91-compare-qber-ideal-label" aria-describedby="e91-compare-qber-ideal-note"></meter></div>
+              <p id="e91-compare-qber-ideal-note" class="e91-comparison-note"></p>
+            </div>
+            <div class="e91-comparison-row e91-comparison-noisy">
+              <div><span id="e91-compare-qber-noisy-label">Có nhiễu</span><strong id="e91-compare-qber-noisy-value">—</strong></div>
+              <div class="e91-comparison-track"><meter id="e91-compare-qber-noisy" min="0" max="1" value="0" aria-labelledby="e91-compare-qber-title e91-compare-qber-noisy-label" aria-describedby="e91-compare-qber-noisy-note"></meter></div>
+              <p id="e91-compare-qber-noisy-note" class="e91-comparison-note"></p>
+            </div>
+            <div class="e91-comparison-axis" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>
+            <figcaption>Tỷ lệ lỗi trên các cặp đo cùng hướng.</figcaption>
+          </figure>
+          <div class="e91-comparison-actions">
+            <button type="button" id="e91-compare-log-ideal" class="button secondary" aria-controls="e91-logs">Xem nhật ký lý tưởng</button>
+            <button type="button" id="e91-compare-log-noisy" class="button secondary" aria-controls="e91-logs">Xem nhật ký có nhiễu</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="e91-logs" class="e91-logs" hidden>
+        <p id="e91-log-context" class="e91-context" tabindex="-1"></p>
+        <section class="card" id="e91-bell-log" aria-labelledby="e91-bell-log-title">
+          <div class="card-heading"><h2 id="e91-bell-log-title">Nhật ký tính CHSH</h2></div>
+          <p class="e91-log-intro">Từ kết quả đo ±1, đếm bốn kết quả ++, +−, −+, −− theo từng tổ hợp góc. Lấy số lượt cùng dấu trừ số lượt trái dấu rồi chia cho tổng số lượt.</p>
+          <div class="table-scroll" role="region" aria-label="Bảng số liệu và phép tính từng tương quan CHSH" tabindex="0">
+            <table class="e91-table">
+              <caption class="sr-only">Tần số kết quả và phép tính tương quan theo tổ hợp góc</caption>
+              <thead><tr><th scope="col">Alice / Bob</th><th scope="col">Số cặp</th><th scope="col">++</th><th scope="col">+−</th><th scope="col">−+</th><th scope="col">−−</th><th scope="col">Tương quan E(a,b)</th></tr></thead>
+              <tbody id="e91-bell-rows"></tbody>
+            </table>
+          </div>
+          <div class="e91-log-body">
+            <p><code>S = E(0°, 45°) − E(0°, 135°) + E(90°, 45°) + E(90°, 135°)</code></p>
+            <p class="e91-equation"><code id="e91-s-equation"></code></p>
+            <p id="e91-s-interval"></p>
+          </div>
+        </section>
+        <section class="card" id="e91-qber-log" aria-labelledby="e91-qber-log-title">
+          <div class="card-heading"><h2 id="e91-qber-log-title">Nhật ký tính QBER</h2></div>
+          <p class="e91-log-intro">Dùng hai tổ hợp cùng hướng. Bob đảo dấu để khớp với Alice trong nguồn lý tưởng. Kết quả gốc ++ hoặc −− trở thành lỗi sau khi đảo.</p>
+          <div class="table-scroll" role="region" aria-label="Bảng số liệu và phép đếm lỗi QBER" tabindex="0">
+            <table class="e91-table">
+              <caption class="sr-only">Tần số hai nhóm dùng cho khóa và số lỗi sau khi Bob đảo dấu</caption>
+              <thead><tr><th scope="col">Alice / Bob</th><th scope="col">Số cặp</th><th scope="col">++</th><th scope="col">+−</th><th scope="col">−+</th><th scope="col">−−</th><th scope="col">Lỗi sau khi đảo</th></tr></thead>
+              <tbody id="e91-key-rows"></tbody>
+            </table>
+          </div>
+          <div class="e91-log-body">
+            <p class="e91-equation"><code id="e91-qber-equation"></code></p>
+            <p id="e91-qber-interval"></p>
+          </div>
+        </section>
+      </div>
+    </section>
+
     <section id="view-packet" class="view" aria-labelledby="packet-title" hidden>
       <div class="page-heading"><div><h1 id="packet-title">Xem bản mã.<br>Tự kiểm chứng phía nhận.</h1><p class="page-description">Thiết lập một phiên BB84 mới, mã hóa rồi chủ động thử sửa gói, giải mã và phát lại.</p></div><span class="person-tag">ChaCha20-Poly1305</span></div>
       <div class="scope-banner"><p><strong>Chỉ dùng thông điệp thử nghiệm công khai.</strong> Bản rõ và bản mã được hiển thị trong trang này theo yêu cầu; không đưa vào CSV hay log. Khóa mô phỏng không dùng bảo vệ dữ liệu thật.</p></div>
@@ -219,7 +378,7 @@
         <article class="about-card"><h2>Khóa của mô hình</h2><p>Cascade sửa Bob qua parity, không sao chép bit Alice. Mọi bit tiết lộ được tính vào ngân sách trước khi rút ngắn bằng Toeplitz.</p><p>Xác nhận thất bại hoặc thiếu ngân sách phải hủy phiên. Wilson và ngân sách entropy giáo dục chưa phải chứng minh an toàn finite-key/composable.</p></article>
         <article class="about-card"><h2>AEAD và vòng đời khóa</h2><p>Dùng ChaCha20Poly1305 của thư viện <code>cryptography</code>. Nonce 96 bit không lặp với cùng khóa; AAD ràng buộc phiên, vai trò và số thứ tự. Phía nhận từ chối phát lại.</p><p>HKDF sau Toeplitz ràng buộc khóa với phiên, không tạo thêm entropy bí mật. Khóa không lưu qua khởi động lại.</p></article>
       </div>
-      <section class="card alternatives-card" aria-labelledby="alternatives-title"><div class="card-heading"><h2 id="alternatives-title">Nếu không dùng BB84 thì dùng gì?</h2></div><p class="alternatives-intro">Các phương án thay phần thiết lập hoặc phân phối khóa. ChaCha20-Poly1305 vẫn nằm ở lớp mã hóa dữ liệu.</p><div class="table-scroll" role="region" aria-label="Các phương án thay BB84, có thể cuộn ngang" tabindex="0"><table class="alternatives-table"><caption class="sr-only">So sánh các phương án thiết lập hoặc phân phối khóa</caption><thead><tr><th scope="col">Phương án</th><th scope="col">Nhóm</th><th scope="col">Dữ liệu cần theo dõi</th><th scope="col">Vai trò trong đề tài</th></tr></thead><tbody><tr><th scope="row">BB84 <span class="choice-status current">Đang dùng</span></th><td>QKD chuẩn bị–đo</td><td>QBER, Wilson, số bit qua các bước</td><td>Mô phỏng và thí nghiệm chính</td></tr><tr><th scope="row">B92</th><td>Hai trạng thái không trực giao</td><td>Lỗi, kết quả có kết luận, tổn hao</td><td>So sánh lý thuyết; cần mô hình đo riêng</td></tr><tr><th scope="row">E91</th><td>QKD dựa trên vướng víu</td><td>CHSH, tương quan đo, QBER, độ bất định</td><td>Mở rộng bằng nguồn vướng víu hoặc mô phỏng Bell</td></tr><tr><th scope="row">ML-KEM</th><td>Thiết lập khóa hậu lượng tử</td><td>Thời gian, kích thước khóa và bản mã KEM</td><td>Giải pháp phần mềm, không cần kênh lượng tử</td></tr><tr><th scope="row">Diffie–Hellman</th><td>Thỏa thuận khóa cổ điển</td><td>Thời gian, khóa công khai, trạng thái phiên</td><td>Đối sánh; không chống máy lượng tử đủ mạnh</td></tr></tbody></table></div><p class="alternatives-decision">Chương trình hiện chỉ triển khai BB84. Số liệu B92, E91, ML-KEM và DH/ECDH chưa được đo trong ứng dụng.</p></section>
+      <section class="card alternatives-card" aria-labelledby="alternatives-title"><div class="card-heading"><h2 id="alternatives-title">Nếu không dùng BB84 thì dùng gì?</h2></div><p class="alternatives-intro">Các phương án thay phần thiết lập hoặc phân phối khóa. ChaCha20-Poly1305 vẫn nằm ở lớp mã hóa dữ liệu.</p><div class="table-scroll" role="region" aria-label="Các phương án thay BB84, có thể cuộn ngang" tabindex="0"><table class="alternatives-table"><caption class="sr-only">So sánh các phương án thiết lập hoặc phân phối khóa</caption><thead><tr><th scope="col">Phương án</th><th scope="col">Nhóm</th><th scope="col">Dữ liệu cần theo dõi</th><th scope="col">Vai trò trong đề tài</th></tr></thead><tbody><tr><th scope="row">BB84 <span class="choice-status current">Đang dùng</span></th><td>QKD chuẩn bị–đo</td><td>QBER, Wilson, số bit qua các bước</td><td>Mô phỏng và thí nghiệm chính</td></tr><tr><th scope="row">B92</th><td>Hai trạng thái không trực giao</td><td>Lỗi, kết quả có kết luận, tổn hao</td><td>So sánh lý thuyết; cần mô hình đo riêng</td></tr><tr><th scope="row">E91</th><td>QKD dựa trên vướng víu</td><td>CHSH, tương quan đo, QBER, độ bất định</td><td><a href="#e91" data-view="e91">Mô phỏng Bell–CHSH</a></td></tr><tr><th scope="row">ML-KEM</th><td>Thiết lập khóa hậu lượng tử</td><td>Thời gian, kích thước khóa và bản mã KEM</td><td>Giải pháp phần mềm, không cần kênh lượng tử</td></tr><tr><th scope="row">Diffie–Hellman</th><td>Thỏa thuận khóa cổ điển</td><td>Thời gian, khóa công khai, trạng thái phiên</td><td>Đối sánh; không chống máy lượng tử đủ mạnh</td></tr></tbody></table></div><p class="alternatives-decision">Dashboard mô phỏng BB84 và E91. Setup mạng cho phép chọn BB84 hoặc E91 để thiết lập khóa cho phiên truyền tệp.</p></section>
       <div class="scope-banner about-footer"><p>Không có photon thật hay thiết bị quang học. Kết quả chỉ áp dụng cho mô hình và các cấu hình đã kiểm tra.</p></div>
     </section>
     <footer class="page-footer"><span translate="no">BB84 Lab</span><span>Mô phỏng cổ điển · Không hiển thị khóa · Bit bài học luôn công khai</span></footer>

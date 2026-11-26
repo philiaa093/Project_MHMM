@@ -31,6 +31,56 @@ Hủy nếu `q_upper >= 0.5`, xác nhận thất bại, hai đầu ra khác nhau
 
 ChaCha20-Poly1305 dùng API của `cryptography`. Trong mô phỏng cùng tiến trình, HKDF-SHA256 ràng buộc khóa đã hậu xử lý với salt phiên mới 128 bit; không thay đối soát, Toeplitz hay tạo thêm entropy bí mật. Nonce là bộ đếm 96 bit, AAD chứa phiên bản/phiên/vai trò/số thứ tự; chỉ trả bản rõ sau xác thực và từ chối phát lại. Không lưu khóa để khôi phục sau khởi động lại. Demo mô phỏng giới hạn một chiều Alice→Bob trong một tiến trình; demo `network` chạy các tiến trình độc lập và HKDF dùng salt suy từ ID phiên chung đã xác thực.
 
+## Mô phỏng E91
+
+Tab **E91** chạy Monte Carlo cục bộ với seed do người xem chọn. Alice chọn
+đều và độc lập từ các hướng `0°, 45°, 90°`, Bob chọn từ `45°, 90°, 135°`.
+Mỗi đầu có kết quả `+1` hoặc `−1`. Hỗn hợp singlet với nhiễu trắng tỷ lệ
+`p` cho tương quan kỳ vọng `E(a,b) = −(1−p) cos(a−b)`, với độ đo của hướng
+trong cùng một mặt phẳng. [Bài gốc của Ekert](https://doi.org/10.1103/PhysRevLett.67.661)
+
+- **CHSH** dùng bốn nhóm `(0°,45°)`, `(0°,135°)`, `(90°,45°)` và `(90°,135°)`.
+  Mỗi tương quan là `(n++ + n−− − n+− − n−+)/n`. Chỉ số `S` cộng bốn
+  tương quan theo dấu `+, −, +, +`. Kỳ vọng của `|S|` theo mô hình là
+  `2√2(1−p)`.
+- **QBER** dùng hai nhóm cùng hướng `(45°,45°)` và `(90°,90°)`. Kết quả lý
+  tưởng đối tương quan. Sau khi quy đổi bằng cách đảo bit của Bob, số lỗi
+  là `n++ + n−−`. Cộng số lỗi của hai nhóm rồi chia tổng số lượt của hai
+  nhóm để tính QBER. Kỳ vọng theo mô hình là `p/2`.
+
+Khoảng CHSH 95% dùng cận Hoeffding hai phía cho từng trung bình `E`, với
+bán kính `sqrt(2 ln(8/0,05)/n)`, rồi ghép bốn cận bằng chặn hợp. Mỗi cận
+được chặn trong `[-1,1]`, cộng theo dấu của từng hạng rồi quy đổi sang `|S|`.
+Chỉ ghi vượt mốc cổ điển 2 khi cận dưới lớn hơn 2. Khoảng QBER dùng Wilson
+95%. Nếu thiếu nhóm cần thiết, giao diện báo chưa đủ dữ liệu cho phép tính
+tương ứng. Nhật ký dùng số đếm tổng hợp. Tab E91 cục bộ chỉ minh họa thống
+kê phép đo. Khi cần gửi tệp, chọn giao thức trong Setup của demo mạng.
+
+Nút **So sánh lý tưởng và có nhiễu** chạy hai lượt với cùng số cặp và seed.
+Lượt lý tưởng dùng `p = 0`, lượt có nhiễu dùng mức đang chọn trong giao
+diện. Hai biểu đồ hiển thị `|S|` và QBER đo được của mỗi lượt. Mốc 2 trên
+biểu đồ `|S|` là giới hạn cổ điển. Khi trình bày ý nghĩa thống kê, xem thêm
+khoảng 95% trong kết quả từng lượt. Giá trị chưa xác định do thiếu mẫu được
+để trống trên biểu đồ.
+
+### E91 trong demo mạng
+
+Alice và Bob có thể chọn E91 trong Setup và truyền tệp qua Eve. Mỗi phiên
+E91 mặc định mô phỏng 8.192 cặp. Hai máy chọn hướng đo bằng ngẫu nhiên hệ
+điều hành. Alice gửi mô tả cổ điển của phép đo qua TCP. Bob sinh kết quả
+có điều kiện theo tương quan singlet. Bốn nhóm Bell được dùng để tính CHSH.
+QBER mạng chỉ dùng mẫu công khai lấy từ hai nhóm đo cùng hướng. Các bit
+mẫu và toàn bộ kết quả đã công khai để tính Bell bị loại khỏi nguyên liệu
+khóa. Quá trình này khác với tab E91 cục bộ dùng cả hai nhóm cùng hướng để
+minh họa QBER và có seed cố định để tái lập.
+
+Phiên E91 đi tiếp khi cận dưới 95% của `|S|` vượt 2 và kiểm tra QBER theo
+khoảng Wilson đạt ngưỡng. Cascade, xác nhận, Toeplitz và ChaCha20-Poly1305
+dùng cùng quy trình giáo dục với BB84. Trong chế độ **Làm mất tương quan**,
+Eve thay một phần mô tả cặp, khiến Bob sinh kết quả độc lập cho các cặp đó.
+Dữ liệu đi qua TCP có thể đọc và sao chép. Điều kiện CHSH, QBER và ngân sách
+khóa chỉ minh họa quyết định của mô hình. [Quy trình demo mạng](NETWORK_DEMO.md#6-giao-thức-và-lưu-trữ)
+
 ## Nghiên cứu và biểu đồ
 
 Cài phần nghiên cứu khi cần tạo lại biểu đồ hoặc chạy Qiskit/Aer; giao diện và self-check cơ bản chỉ cần `requirements.txt`:

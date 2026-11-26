@@ -1,6 +1,6 @@
 # BB84 Lab
 
-Mô phỏng BB84 cổ điển, giám sát QBER, hậu xử lý khóa giáo dục và trình diễn truyền tệp Alice–Bob–Eve.
+Mô phỏng BB84 và E91 trên máy cổ điển, theo dõi QBER và CHSH, minh họa hậu xử lý khóa và truyền tệp Alice–Eve–Bob.
 
 [English](README.md) · [Mô hình nghiên cứu](docs/RESEARCH.md) · [Hướng dẫn mạng](docs/NETWORK_DEMO.md) · [Đóng góp](CONTRIBUTING.md)
 
@@ -21,7 +21,7 @@ Với tỷ lệ chặn `f` và xác suất lật bit sau phép đo `p`, mô hìn
 | BB84/QBER | Monte Carlo có seed, sàng lọc, loại mẫu, Wilson 95%, `continue` / `anomalous` / `inconclusive` |
 | Hậu xử lý | Cascade giáo dục bốn lượt có lookback, xác nhận SHA-256, Toeplitz, ngân sách rò rỉ/entropy và hủy khi thất bại |
 | Mật mã | HMAC-SHA256, HKDF ràng buộc ngữ cảnh, ChaCha20-Poly1305 của `cryptography`, nonce bộ đếm, từ chối sửa gói/phát lại |
-| Dashboard mô phỏng | Kịch bản, bài học 16 tín hiệu, xem gói, JSON/CSV kiểm chứng công khai, xem study hoàn tất |
+| Dashboard mô phỏng | Kịch bản và bài học BB84 16 tín hiệu, mô phỏng E91 có nhật ký CHSH và QBER, xem gói, JSON/CSV kiểm chứng công khai, xem study hoàn tất |
 | Mạng | Alice/Bob/Eve độc lập, Eve không có PSK, sáu chế độ proxy, dashboard loopback từng vai trò |
 | Truyền tệp | Văn bản/tệp bất kỳ, khối 64 KiB, mặc định 512 MiB, xác thực hoàn tất, kích thước/SHA-256, HTTP Range |
 | Nghiên cứu | Seed hiệu chỉnh/đánh giá riêng, đóng băng lựa chọn mẫu, bootstrap ghép cặp, đo hậu xử lý, năm nhóm hình PNG/SVG, Qiskit/Aer tùy chọn |
@@ -87,6 +87,8 @@ Phiên hủy theo QBER có thể trả JSON với mã thoát 0; phải đọc tr
 
 Dashboard có bài học từng bước, xem gói/sửa gói/giải mã/phát lại và nhật ký công thức thực thi. Bit công khai trong bài học không đi vào mã hóa. Gói demo giữ trong RAM có giới hạn; chỉ dùng thông điệp công khai. Xem [kịch bản 5–7 phút](docs/DEMO.md), [thiết kế UI](docs/UI_DESIGN.md), [chi tiết mô hình/ngân sách](docs/RESEARCH.md).
 
+Trên dashboard cục bộ, mở **E91**, nhập số cặp và seed, đặt mức nhiễu trắng rồi bấm **So sánh lý tưởng và có nhiễu**. Hai biểu đồ đặt cạnh nhau hiển thị `|S|` và QBER đo được từ hai lượt dùng chung số cặp và seed. Để đọc nhật ký từng lượt, bấm **Xem nhật ký lý tưởng** hoặc **Xem nhật ký có nhiễu**. Nhật ký CHSH và QBER hiển thị số đếm kết quả đo, công thức đã thay số và khoảng 95%. [Mô hình và giả định E91](docs/RESEARCH.md#mô-phỏng-e91)
+
 ## Alice–Bob–Eve qua mạng
 
 Để gửi trực tiếp giữa hai máy, kết nối hai máy vào cùng mạng LAN hoặc VPN riêng. Chạy lệnh sau tại thư mục gốc dự án trên cả hai máy.
@@ -95,15 +97,15 @@ Dashboard có bài học từng bước, xem gói/sửa gói/giải mã/phát l�
 python -m bb84_lab.network setup --open
 ```
 
-Mỗi máy mở trang của mình tại `http://127.0.0.1:8770`. Bấm **Tạo PSK** trên một máy hoặc dùng tệp PSK đã có. Chuyển riêng tệp ở đường dẫn hiển thị sang máy kia rồi bấm **Nhập tệp PSK** trên máy đó. Tệp mặc định là `outputs/network/auth.key`. Khởi động Bob với IPv4 của máy nhận trước, rồi khởi động Alice với cùng IPv4 và cổng TCP `9100`. Để đổi vai trò hoặc địa chỉ, nhấn `Ctrl+C` rồi chạy lại lệnh thiết lập. [Hướng dẫn demo mạng](docs/NETWORK_DEMO.md)
+Mỗi máy mở trang của mình tại `http://127.0.0.1:8770`. Bấm **Tạo PSK** trên một máy hoặc dùng tệp PSK đã có. Chuyển riêng tệp ở đường dẫn hiển thị sang máy kia rồi bấm **Nhập tệp PSK** trên máy đó. Tệp mặc định là `outputs/network/auth.key`. Trong **Giao thức tạo khóa**, chọn cùng **BB84** hoặc **E91** trên cả hai máy. Khởi động Bob với IPv4 của máy nhận trước, rồi khởi động Alice với cùng IPv4 và cổng TCP `9100`. Để đổi giao thức, nhấn `Ctrl+C` và chạy lại Setup trên cả hai máy. [Hướng dẫn demo mạng](docs/NETWORK_DEMO.md)
 
 Để chạy Eve trên máy Alice, chọn **Chạy kèm Eve trên máy Alice** trong trang thiết lập. Giữ IPv4 và cổng TCP của Bob trong biểu mẫu rồi bấm **Khởi động Alice và Eve**. Mở **Bảng điều khiển Eve** từ dashboard Alice để chọn chế độ cho lượt gửi tiếp theo. Eve chỉ lắng nghe trên máy Alice và không dùng PSK. [Chạy Eve từ giao diện thiết lập](docs/NETWORK_DEMO.md#chạy-eve-ngay-trên-máy-alice)
 
-Trên Alice hoặc Bob, xem **Terminal tạo khóa** để theo dõi phiên truyền đang chạy hoặc vừa kết thúc. Bấm **Xem log chi tiết** để xem cơ sở và bit mẫu đã công khai của BB84, từng truy vấn parity của Cascade và các hệ số công khai của Toeplitz trong phiên đó. Bob có thêm các bước chia khối, lật bit và kiểm tra lại khối. Đối chiếu mã phiên trên hai máy để ghép hai log. Log nằm trong RAM và giữ kín PSK, khóa phiên và các chuỗi bit bí mật.
+Trên Alice hoặc Bob, mở **Terminal tạo khóa → Xem log chi tiết**. BB84 hiển thị sàng lọc và QBER. E91 hiển thị CHSH và QBER, cả hai phải đạt điều kiện mô hình thì phiên mới đi tiếp. Cả hai giao thức dùng Cascade, Toeplitz và ChaCha20-Poly1305 sau khi qua giám sát. Đối chiếu mã phiên trên hai máy để ghép hai log. Log nằm trong RAM và giữ kín PSK, khóa phiên và các chuỗi bit bí mật. [Quy trình và log](docs/NETWORK_DEMO.md#xem-log-của-phiên-truyền)
 
 Mở **Tạo khóa từng bước** để xem trọn phép nhân cùng các bit đầu vào và đầu ra trong một ví dụ giảng dạy công khai.
 
-Để chạy ba vai trò thành ba tiến trình trên cùng một máy, mở ba terminal với cùng môi trường ảo. Chạy `init` một lần để tạo tệp PSK 32 byte. Lệnh giữ nguyên tệp đã có.
+Ví dụ dòng lệnh dưới đây chạy BB84 với ba vai trò riêng trên một máy. Mở ba terminal với cùng môi trường ảo. Chạy `init` một lần để tạo tệp PSK 32 byte. Lệnh giữ nguyên tệp đã có.
 
 ```sh
 python -m bb84_lab.network init --psk-file outputs/network/auth.key

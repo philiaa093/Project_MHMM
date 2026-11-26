@@ -8,6 +8,7 @@ import threading
 
 def check_http():
     from bb84_lab.local.server import make_server
+    from bb84_lab.core.e91 import simulate_e91
     server = make_server(0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -31,7 +32,9 @@ def check_http():
         assert status == 200
         assert b'class="card crypto-stack"' in body and b'class="alternatives-table"' in body
         assert b'id="verification-title"' in body and b'id="download-verification"' in body
+        assert b'data-view="e91"' in body
         for url, filename in (("/app.js", "simulation/app.js"), ("/education.js", "simulation/education.js"),
+                              ("/e91.js", "simulation/e91.js"), ("/e91.css", "simulation/e91.css"),
                               ("/shared/styles.css", "shared/styles.css")):
             status, body = request(url)
             assert status == 200
@@ -54,6 +57,13 @@ def check_http():
         assert status == 200 and len(lesson["signals"]) == 16 and not lesson["key_released"]
         assert request("/api/lesson", {"signals": 4096})[0] == 400
         assert request("/api/lesson", {"seed": True})[0] == 400
+        for probability in (0, 0.5):
+            config = {"signals": 4096, "seed": 2026, "noise_probability": probability}
+            status, body = request("/api/e91/simulate", config)
+            assert status == 200 and json.loads(body) == simulate_e91(**config)
+        for invalid in ({"eve_fraction": 1}, {"seed": True}, {"noise_probability": -0.1}, {"signals": 65537}):
+            assert request("/api/e91/simulate", invalid)[0] == 400
+        assert request("/api/e91/simulate", raw=b'{"noise_probability":NaN}')[0] == 400
         status, body = request("/api/packet", {"message": "Chào Bob!"})
         packet = json.loads(body)
         assert status == 200 and packet["postprocessing"]["status"] == "ready"

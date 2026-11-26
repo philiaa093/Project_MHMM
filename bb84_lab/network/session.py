@@ -1,4 +1,4 @@
-"""Distributed educational BB84 key agreement for independent Alice/Bob roles.
+"""BB84 network measurements and shared postprocessing for Alice and Bob.
 
 Quantum states are readable classical data; the model provides no physical QKD secrecy.
 """
@@ -19,7 +19,7 @@ from bb84_lab.network.key_trace import (
     trace_parity_detail, trace_qber, trace_sifting, trace_step,
 )
 from bb84_lab.network.packets import receive_encrypted, send_encrypted
-from bb84_lab.network.transport import PublicPeer, receive_frame, send_frame
+from bb84_lab.network.transport import ProtocolMismatch, PublicPeer, receive_frame, send_frame
 
 
 def _bits(value, length):
@@ -74,6 +74,19 @@ def hello_bob(connection, psk):
     return PublicPeer(connection, psk, session_id, "bob")
 
 
+def receive_config(peer, expected_kind):
+    frame = peer.receive()
+    if frame.get("kind") != expected_kind:
+        if frame.get("kind") in ("config", "e91-config"):
+            peer.send({"kind": "protocol-mismatch"})
+            raise ProtocolMismatch("Alice và Bob phải chọn cùng giao thức")
+        raise AuthenticationError("Sai bước cấu hình phiên")
+    config = frame.get("config")
+    if type(config) is not dict:
+        raise ValueError("Cấu hình phiên phải là một đối tượng")
+    return network_config(config)
+
+
 def prepare_alice_channel(peer, config, event, *, record_details=None):
     peer.send({"kind": "config", "config": public_config(config)})
     bits = [secrets.randbits(1) for _ in range(config.signals)]
@@ -107,9 +120,13 @@ def prepare_alice_channel(peer, config, event, *, record_details=None):
     if decision["status"] != "continue":
         return None, stats
     local = tuple(bits[i] for i in retained)
+    return finish_alice_channel(peer, local, config, stats, event, record_details)
+
+
+def finish_alice_channel(peer, local, config, stats, event, record_details):
     trace_step(event, "cascade", "Bắt đầu đối soát",
                f"Alice trả lời truy vấn parity của Bob trên {len(local)} bit giữ lại.")
-    trace_cascade_plan(record_details, len(local), decision["qber"], config.seed)
+    trace_cascade_plan(record_details, len(local), stats["qber"], config.seed)
     leak = queries = 0
     while True:
         query = peer.receive()
@@ -130,7 +147,7 @@ def prepare_alice_channel(peer, config, event, *, record_details=None):
         trace_parity_detail(record_details, queries, indices, parity, query["parity"])
     trace_cascade_queries(event, queries, leak)
     accepted = type(query.get("digest")) is str and hmac.compare_digest(query["digest"], _confirmation(peer.session_id, local))
-    entropy, output = key_budget(len(local), decision["ci_high"], leak)
+    entropy, output = key_budget(len(local), stats["ci_high"], leak)
     peer.send({"kind": "confirmed", "accepted": accepted, "output_bits": output, "parity_leak_bits": leak})
     stats.update(parity_leak_bits=leak, confirmation_leak_bits=CONFIRMATION_BITS,
                  entropy_budget_bits=entropy, output_bits=output)
@@ -138,7 +155,7 @@ def prepare_alice_channel(peer, config, event, *, record_details=None):
         trace_step(event, "cascade", "Xác nhận chuỗi sau đối soát", "Chưa xác nhận được hai chuỗi bằng SHA-256.", "error")
         raise AuthenticationError("Xác nhận khóa thất bại; hủy phiên")
     trace_step(event, "cascade", "Xác nhận chuỗi sau đối soát", "Alice đã xác nhận hai chuỗi khớp bằng SHA-256.", "ok")
-    trace_budget(event, len(local), decision["ci_high"], entropy, leak, output, record_details)
+    trace_budget(event, len(local), stats["ci_high"], entropy, leak, output, record_details)
     if output < 256:
         stats["status"] = "insufficient_key"
         return None, stats
@@ -156,7 +173,7 @@ def prepare_alice_channel(peer, config, event, *, record_details=None):
 
 
 def prepare_bob_channel(peer, event, noise=0, *, record_details=None):
-    config = network_config(peer.receive("config")["config"])
+    config = receive_config(peer, "config")
     trace_step(event, "auth", "Xác thực thảo luận công khai",
                "Bob đã kiểm tra HMAC-SHA256 và thứ tự của thông điệp cấu hình do Alice gửi.", "ok")
     quantum = receive_frame(peer.connection)
@@ -192,10 +209,15 @@ def prepare_bob_channel(peer, event, noise=0, *, record_details=None):
     event("qber", "Đã đo tín hiệu, loại mẫu và tính QBER", **stats)
     if decision["status"] != "continue":
         return None, stats
+    local = tuple(bits[i] for i in retained)
+    return finish_bob_channel(peer, local, config, stats, event, record_details)
+
+
+def finish_bob_channel(peer, local_bits, config, stats, event, record_details):
     leak = queries = 0
     trace_step(event, "cascade", "Bắt đầu đối soát",
-               f"Bob chia {len(retained)} bit thành các khối, so parity rồi chia đôi khối có parity khác nhau để tìm lỗi.")
-    trace_cascade_plan(record_details, len(retained), decision["qber"], config.seed)
+               f"Bob chia {len(local_bits)} bit thành các khối, so parity rồi chia đôi khối có parity khác nhau để tìm lỗi.")
+    trace_cascade_plan(record_details, len(local_bits), stats["qber"], config.seed)
     last_parities = None
 
     def parity(indices, corrected):
@@ -237,13 +259,13 @@ def prepare_bob_channel(peer, event, noise=0, *, record_details=None):
                                         f"{queries - previous_queries} truy vấn và {flips} lần lật bit.", "ok")])
         previous_queries = queries
 
-    corrected, corrections = cascade_correct(tuple(bits[i] for i in retained), decision["qber"], parity,
+    corrected, corrections = cascade_correct(local_bits, stats["qber"], parity,
                                              config.seed, on_pass=report_pass,
                                              on_step=report_step if record_details is not None else None)
     trace_cascade_queries(event, queries, leak, corrections)
     peer.send({"kind": "confirm", "digest": _confirmation(peer.session_id, corrected)})
     reply = peer.receive("confirmed")
-    entropy, output = key_budget(len(corrected), decision["ci_high"], leak)
+    entropy, output = key_budget(len(corrected), stats["ci_high"], leak)
     if reply != {"kind": "confirmed", "accepted": True, "output_bits": output, "parity_leak_bits": leak}:
         trace_step(event, "cascade", "Xác nhận chuỗi sau đối soát",
                    "Bob chưa xác nhận được kết quả SHA-256 hoặc số liệu ngân sách từ Alice.", "error")
@@ -251,7 +273,7 @@ def prepare_bob_channel(peer, event, noise=0, *, record_details=None):
     trace_step(event, "cascade", "Xác nhận chuỗi sau đối soát", "Alice xác nhận SHA-256 khớp. Bob đối chiếu ngân sách.", "ok")
     stats.update(parity_leak_bits=leak, confirmation_leak_bits=CONFIRMATION_BITS, corrected_errors=corrections,
                  entropy_budget_bits=entropy, output_bits=output)
-    trace_budget(event, len(corrected), decision["ci_high"], entropy, leak, output, record_details)
+    trace_budget(event, len(corrected), stats["ci_high"], entropy, leak, output, record_details)
     if output < 256:
         stats["status"] = "insufficient_key"
         return None, stats

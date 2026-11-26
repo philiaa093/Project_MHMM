@@ -15,7 +15,7 @@
     <nav class="network-nav" aria-label="Demo mạng">
       <a id="network-session-link" href="/" aria-current="page">Phiên mạng</a>
       <a id="eve-link" href="/eve" hidden>Bảng điều khiển Eve</a>
-      <a href="/key-lesson">Tạo khóa từng bước</a>
+      <a id="key-lesson-link" href="/key-lesson">Tạo khóa từng bước</a>
       <a id="setup-link" href="/setup" hidden>Cấu hình</a>
     </nav>
     <span id="connection" class="connection" role="status">Đang kết nối giao diện…</span>
@@ -23,10 +23,13 @@
   <main id="main" tabindex="-1">
     <div class="page-heading">
       <div><h1 id="role-title">Hai đầu nhận gửi. Một kênh quan sát.</h1>
-      <p class="page-description" id="role-description">Văn bản, hình ảnh, âm thanh và video qua phiên BB84 mô phỏng.</p></div>
-      <span id="role-badge" class="person-tag">Đang tải</span>
+      <p class="page-description" id="role-description">Văn bản, hình ảnh, âm thanh và video qua phiên mô phỏng.</p></div>
+      <div class="network-role-badges">
+        <span id="protocol-badge" class="person-tag network-protocol-badge" hidden></span>
+        <span id="role-badge" class="person-tag">Đang tải</span>
+      </div>
     </div>
-    <p class="scope-banner">Mô phỏng cổ điển qua mạng. Tín hiệu lượng tử là dữ liệu phần mềm có thể sao chép; chỉ dùng nội dung thử nghiệm.</p>
+    <p class="scope-banner">Mô phỏng cổ điển qua mạng. Tín hiệu mô phỏng được truyền dưới dạng dữ liệu phần mềm có thể sao chép. Chỉ dùng nội dung thử nghiệm.</p>
     <section class="network-route" aria-label="Đường truyền">
       <div data-role="alice"><span class="route-person">Alice</span><span>Chuẩn bị &amp; gửi</span></div>
       <span class="route-line" aria-hidden="true">→</span>
@@ -65,16 +68,16 @@
           <div class="form-row"><label for="attack-mode">Can thiệp phiên tiếp theo</label>
             <select id="attack-mode">
               <option value="pass">Chỉ chuyển tiếp</option>
-              <option value="intercept">Chặn–đo–gửi lại</option>
+              <option id="eve-intercept-mode" value="intercept">Chặn–đo–gửi lại</option>
               <option value="tamper">Sửa một bit bản mã</option>
               <option value="replay">Phát lại một gói</option>
               <option value="drop">Ngắt truyền</option>
               <option value="tamper-public">Sửa thảo luận công khai</option>
             </select>
           </div>
-          <div class="form-row"><label for="eve-fraction">Tỷ lệ tín hiệu chặn–đo–gửi lại</label>
-            <input id="eve-fraction" type="number" min="0" max="1" step="0.1" value="1">
-            <p class="input-help">Từ 0 đến 1; chỉ áp dụng khi chọn chặn–đo–gửi lại. Toàn phần có QBER kỳ vọng 25% khi không nhiễu.</p>
+          <div class="form-row"><label id="eve-fraction-label" for="eve-fraction">Tỷ lệ tín hiệu chặn–đo–gửi lại</label>
+            <input id="eve-fraction" type="number" min="0" max="1" step="0.1" value="1" aria-describedby="eve-fraction-help">
+            <p id="eve-fraction-help" class="input-help">Từ 0 đến 1, áp dụng khi chọn chặn–đo–gửi lại. Toàn phần có QBER kỳ vọng 25% khi không nhiễu.</p>
           </div>
           <button id="apply-attack" class="network-button" type="submit">Áp dụng chế độ</button>
           <p class="input-help" id="active-mode"></p>
@@ -92,7 +95,10 @@
             <div><dt>Bit mẫu đã loại</dt><dd id="sample-count">—</dd></div>
             <div><dt>Bit giữ lại</dt><dd id="retained">—</dd></div>
             <div><dt>Đầu ra Toeplitz</dt><dd id="output-bits">—</dd></div>
-            <div><dt>Quyết định QBER</dt><dd id="decision">—</dd></div>
+            <div><dt id="decision-label">Quyết định QBER</dt><dd id="decision">—</dd></div>
+            <div data-e91-metric hidden><dt>CHSH |S|</dt><dd id="chsh-value">—</dd></div>
+            <div data-e91-metric hidden><dt>Khoảng 95% của |S|</dt><dd id="chsh-interval">—</dd></div>
+            <div data-e91-metric hidden><dt>Kết quả CHSH</dt><dd id="chsh-status">—</dd></div>
           </dl>
           <label for="transfer-progress">Dữ liệu qua kênh mã hóa</label>
           <progress id="transfer-progress" max="1" value="0"></progress>
@@ -102,7 +108,7 @@
           <div class="key-terminal-header">
             <div>
               <h2 id="key-terminal-title">Terminal tạo khóa</h2>
-              <p>Nhật ký BB84, Cascade và Toeplitz của phiên trên máy này.</p>
+              <p id="key-terminal-description">Nhật ký BB84, Cascade và Toeplitz của phiên trên máy này.</p>
             </div>
             <button id="key-terminal-copy" type="button" disabled>Sao chép tóm tắt</button>
           </div>
@@ -116,6 +122,7 @@
             <summary>Xem log chi tiết</summary>
             <div class="key-trace-stages" role="group" aria-label="Chọn thuật toán">
               <button type="button" data-key-trace-stage="bb84" aria-pressed="true">BB84</button>
+              <button type="button" data-key-trace-stage="e91" aria-pressed="false" hidden>E91 · CHSH và QBER</button>
               <button type="button" data-key-trace-stage="cascade" aria-pressed="false">Cascade</button>
               <button type="button" data-key-trace-stage="toeplitz" aria-pressed="false">Toeplitz</button>
             </div>
