@@ -215,131 +215,132 @@ chưa đủ bằng chứng để kết luận tương quan vượt giới hạn 
 
 ## Kịch bản kết hợp BB84 hai máy và E91
 
-Kịch bản khoảng 8 phút, dành cho ba người. Nếu nhóm có hai người, người A
-kiêm C. Nếu có bốn người, giao tab E91 và phần kết cho người D.
+Thời lượng dự kiến 8 phút. Cả hai lượt gửi cùng tệp `demo.png` qua
+**Alice → Eve → Bob**. Eve giữ chế độ **Chỉ chuyển tiếp** ở cả hai lượt.
 
-| Người | Máy | Thao tác và phụ trách lời thoại |
+| Người | Vị trí | Phụ trách |
 |---|---|---|
-| A | Máy gửi | Mở đầu, điều khiển Alice, gửi tệp rồi gửi văn bản thử, đối chiếu mã phiên và chuyển phần. |
-| B | Máy nhận | Điều khiển Bob, chiếu hộp nhận và Terminal tạo khóa, đọc kết quả của hai phiên BB84. |
-| C | Máy gửi | Điều khiển Eve, chuyển sang tab E91, đọc hai biểu đồ và nhật ký từng lượt. |
+| **A** | Máy gửi | Dẫn demo, chạy Setup Alice, gửi tệp và đọc mã phiên. |
+| **B** | Máy nhận | Chạy Setup Bob, xác nhận tệp, chiếu nhật ký BB84 và E91. |
+| **C** | Máy gửi | Kiểm tra Eve, chuyển nguồn chiếu và tổng hợp số liệu hai lượt. |
+
+Nếu nhóm có hai người, A kiêm C. Nếu có bốn người, D đọc bảng so sánh và kết
+thúc. Chỉ chuyển nguồn chiếu khi người đang nói nhắc tên người kế tiếp.
 
 ### Trước giờ chiếu
 
-- Chuẩn bị cùng bản mã nguồn và tạo `.venv` riêng trên mỗi máy. Kết nối cùng
-  LAN hoặc VPN riêng. A chuẩn bị một ảnh PNG nhỏ có tên `demo.png`.
-  Cài đặt và kiểm tra kết nối theo [hướng dẫn hai máy](NETWORK_DEMO.md#thiết-lập-alice-và-bob-trong-trình-duyệt).
-- A và B đều chạy `.\.venv\Scripts\python.exe -m bb84_lab.network setup --open`.
-  B tạo PSK hoặc dùng khóa đã có, rồi chuyển riêng đúng tệp đó cho A nhập.
-  B chọn **Bob** và giao thức **BB84**, nhập IPv4 và cổng `9100`, bấm **Khởi động Bob**.
-  A chọn **Alice** và **BB84**, nhập cùng IPv4 và cổng của Bob, chọn **Chạy kèm Eve trên
-  máy Alice**, bấm **Khởi động Alice và Eve**.
-- C mở **Bảng điều khiển Eve** trong tab riêng trên máy gửi, kiểm tra chế độ
-  **Chỉ chuyển tiếp**. Mở một PowerShell nữa trên máy gửi và chạy
-  `.\.venv\Scripts\python.exe -m bb84_lab.local --open`. Mở tab **E91** ở
-  `http://127.0.0.1:8765/#e91`. Chuẩn bị `4096` cặp, seed `2026` và nhiễu `50%`.
-- Tập chuyển nguồn chiếu giữa hai máy. Các trang Alice và Eve dùng
-  `http://127.0.0.1:8770` và `/eve` trên máy gửi. Bob mở `http://127.0.0.1:8770`
-  trên máy nhận. Giữ các tiến trình chạy, tránh hiện cửa sổ tệp PSK khi chiếu.
+1. Dùng cùng bản mã nguồn trên hai máy, tạo môi trường `.venv` riêng và kết
+   nối vào cùng LAN hoặc VPN riêng. B lấy IPv4 của máy nhận bằng `ipconfig`
+   và gửi địa chỉ cho A. Chuẩn bị ảnh PNG nhỏ `demo.png` trên máy gửi.
+2. Mở PowerShell tại thư mục dự án trên mỗi máy và chạy lệnh bên dưới. B
+   tạo PSK hoặc dùng tệp sẵn có. Chép đúng tệp sang A qua kênh riêng, rồi
+   A chọn **Nhập tệp PSK**. Cả hai máy phải báo **PSK đã sẵn sàng**. Để
+   màn hình Setup mở trước khi bắt đầu chiếu.
+3. C chuẩn bị một bảng ghi hai cột **BB84** và **E91**. Chừa chỗ cho mã
+   phiên, QBER mẫu, khoảng Wilson 95%, bit giữ lại, đầu ra Toeplitz và
+   SHA-256 tệp nhận. Cột E91 thêm `|S|` và khoảng 95% của nó. Chuẩn bị
+   tệp ghi chú để dán hai bản **Sao chép tóm tắt**.
 
-### 0:00–0:45 · A mở đầu, C xác nhận Eve đang chuyển tiếp
+```powershell
+.\.venv\Scripts\python.exe -m bb84_lab.network setup --open
+```
 
-**Chiếu máy gửi.** A mở trang Alice. C chuyển nhanh sang tab Eve, chỉ vào
-chế độ **Chỉ chuyển tiếp**, rồi trả màn hình cho A.
+Dashboard mặc định ở `http://127.0.0.1:8770` trên mỗi máy. Eve mở tại
+`http://127.0.0.1:8770/eve` trên máy gửi. [Thiết lập và kiểm tra mạng](NETWORK_DEMO.md#thiết-lập-alice-và-bob-trong-trình-duyệt)
 
-> **A** “Máy này chạy Alice và Eve. Máy còn lại chạy Bob. Alice gửi qua
-> Eve rồi Eve chuyển tiếp tới Bob. Lượt đầu Eve chỉ chuyển tiếp để nhóm
-> kiểm tra đường truyền BB84 trước khi bật can thiệp.”
+### 0:00–1:15 · B khởi động Bob, A khởi động Alice và Eve
 
-### 0:45–2:50 · A gửi tệp, B chiếu kết quả và log BB84
+**Chiếu máy nhận.** B chọn **Bob → BB84** trong **Giao thức tạo khóa**,
+nhập IPv4 của máy Bob và cổng `9100`, bấm **Khởi động Bob**. Khi thấy
+trang **Bob · Nhận dữ liệu**, B nói “Bob đã sẵn sàng, mời Alice.”
 
-**A** chọn `demo.png` rồi bấm **Gửi tệp**. Khi Alice báo hoàn tất,
-A đọc phần đầu mã phiên trong **Terminal tạo khóa** và nói “Mời Bob xác
-nhận tệp và mã phiên.” **Chuyển chiếu sang máy nhận.**
+**Chuyển sang máy gửi.** A chọn **Alice → BB84**, nhập IPv4 và cổng của
+Bob, tích **Chạy kèm Eve trên máy Alice**, bấm **Khởi động Alice và Eve**.
+C mở **Bảng điều khiển Eve**, chỉ chế độ **Chỉ chuyển tiếp**, rồi trả
+màn hình về Alice.
 
-**B** mở **Bob đã nhận**, chỉ vào tệp mới và SHA-256 đã khớp. Sau đó cuộn
-lên **Terminal tạo khóa**, đối chiếu mã phiên rồi bấm **Xem log chi tiết**.
-Chọn lần lượt **BB84**, **Cascade**, **Toeplitz**. Chỉ một bước đại diện
-trong mỗi mục. Trong tóm tắt, chỉ QBER và mốc xác nhận khóa ứng dụng.
+> **A nói** “Nhóm sẽ gửi cùng một tệp qua Eve hai lần. Lượt đầu Alice và
+> Bob thiết lập khóa bằng BB84. Eve chuyển tiếp ở cả hai lượt để nhóm
+> đối chiếu bước thiết lập khóa của hai giao thức.”
 
-> **B** “Bob đã nhận và kiểm tra tệp. Mã phiên trùng với Alice. BB84 giữ
-> tín hiệu cùng cơ sở, lấy mẫu để tính QBER rồi loại các bit mẫu. Cascade
-> so parity để đối soát. Toeplitz rút ngắn chuỗi đã đối soát trước khi
-> hai bên xác nhận khóa ứng dụng. Log hiện các phép tính và kết quả kiểm tra.”
+### 1:15–3:05 · A gửi tệp BB84, B thu log trước khi đổi giao thức
 
-B đọc **QBER và số bit đang hiện**, vì các phiên mạng lấy bit và cơ sở ngẫu
-nhiên. B có thể bấm **Sao chép tóm tắt** trước khi chạy lượt tiếp theo.
-B nói “Mời Eve bật can thiệp cho lượt mới.”
+**A** chọn `demo.png`, bấm **Gửi tệp**, chờ **Hoàn tất** và đọc vài ký
+tự đầu của mã phiên để dẫn sang màn hình Bob. C có thể chỉ dòng **Đã
+chuyển tiếp biên nhận của Bob** trong nhật ký Eve để xác nhận đường đi.
 
-### 2:50–4:10 · C bật can thiệp, A gửi lại, B đọc bước dừng
+**Chuyển sang máy nhận.** B mở **Bob đã nhận** và ghi lại SHA-256 đã
+khớp. Đối chiếu mã phiên với Alice, rồi mở **Terminal tạo khóa → Xem log
+chi tiết → BB84**. Chỉ một dòng giữ hoặc loại theo cơ sở Z/X và quay về
+tóm tắt để đọc QBER, Wilson và quyết định. Chỉ thêm một truy vấn parity
+ở **Cascade** và một dòng đầu ra ở **Toeplitz**.
 
-**Chiếu máy gửi.** C vào Eve, chọn **Chặn–đo–gửi lại**, đặt tỷ lệ `1`,
-bấm **Áp dụng chế độ**, rồi đợi trạng thái cập nhật. A trở về Alice và gửi
-văn bản `Lượt thử có Eve` bằng **Gửi văn bản**.
+> **B nói** “BB84 giữ các vị trí cùng cơ sở, công khai một phần để tính
+> QBER rồi loại mẫu đó. Nếu qua kiểm tra, hai bên đối soát bằng Cascade
+> và rút ngắn chuỗi bằng Toeplitz. Phiên đã xác nhận khóa ứng dụng và
+> Bob nhận đúng tệp.”
 
-> **C** “Lượt này Eve chặn–đo–gửi lại toàn bộ tín hiệu mô phỏng. Khi không
-> có nhiễu nền, QBER kỳ vọng khoảng 25%. Nhóm sẽ đọc số đo và quyết định
-> của phiên vừa chạy.”
+**B bấm Sao chép tóm tắt**, dán vào cột BB84. Chụp màn hình các dòng log
+chi tiết muốn chiếu lại và dòng SHA-256 trước khi dừng. C ghi số liệu thực
+tế. B nói “Đã lưu log BB84, mời A và C chuyển sang E91.”
 
-**Chuyển chiếu sang máy nhận.** B kiểm tra **mã phiên mới**, đọc QBER và
-quyết định giám sát trong **Terminal tạo khóa**. Khi phiên dừng ở QBER,
-chỉ vào bước dừng và xác nhận văn bản mới chưa xuất hiện ở **Bob đã nhận**.
-Tệp `demo.png` thuộc lượt đầu vẫn có trong hộp nhận.
+### 3:05–4:30 · A và B đổi giao thức trong Setup
 
-> **B** “Log cho thấy phiên mới dừng ở QBER, trước Cascade, Toeplitz và
-> truyền dữ liệu. Giờ mời C chuyển sang E91 để xem thêm thước đo tương
-> quan CHSH trên mô hình cặp vướng víu.”
+1. A và B nhấn `Ctrl+C` ở cửa sổ PowerShell đang chạy Setup trên hai máy,
+   rồi chạy lại lệnh `setup --open` ở trên. Dừng máy gửi cũng dừng Eve.
+2. **Chiếu máy nhận.** B chọn **Bob → E91**, giữ IPv4 và cổng `9100`,
+   bấm **Khởi động Bob**. Dùng lại PSK đã có. B nói “Bob đã chọn E91.”
+3. **Chuyển sang máy gửi.** A chọn **Alice → E91**, nhập lại IPv4 và cổng
+   của Bob, tích **Chạy kèm Eve trên máy Alice**, bấm **Khởi động Alice
+   và Eve**. C mở lại hoặc tải lại tab Eve, chỉ **E91** và **Chỉ chuyển tiếp**.
 
-### 4:10–5:35 · C chạy E91 và chiếu hai biểu đồ
+> **C nói** “Hai đầu đã chọn E91. Địa chỉ Bob, PSK, tệp và đường đi qua
+> Eve giữ nguyên. Bây giờ phiên sẽ dùng thêm phép kiểm tra CHSH.”
 
-**Chuyển chiếu về máy gửi.** C mở tab **E91**, chỉ vào `4096` cặp, seed
-`2026`, nhiễu `50%`, rồi bấm **So sánh lý tưởng và có nhiễu**. Chỉ vạch
-đứt ở 2 và khoảng 95% dưới hai thanh CHSH, sau đó chỉ hai thanh QBER.
+### 4:30–6:45 · A gửi lại cùng tệp, B đọc log E91
 
-> **C** “Hai lượt E91 dùng cùng số cặp và seed. Lượt lý tưởng có |S| khoảng
-> 2,83, với cả khoảng 95% nằm trên mốc cổ điển 2. Lượt nhiễu 50% có |S|
-> khoảng 1,34, với cả khoảng nằm dưới 2. Trên các cặp đo cùng hướng, QBER
-> tăng từ 0% lên 24,87%.”
+**A** chọn lại chính tệp `demo.png`, bấm **Gửi tệp**, chờ **Hoàn tất** rồi
+đọc mã phiên mới. **Chuyển sang máy nhận.** B mở **Bob đã nhận**, so SHA-256
+với ghi chú lượt BB84. B đối chiếu mã phiên E91 với Alice, rồi chỉ
+`|S|`, khoảng 95%, QBER và quyết định giám sát đang hiển thị.
 
-### 5:35–7:40 · C mở hai nhật ký, A kết thúc
+**B bấm** **Terminal tạo khóa → Xem log chi tiết → E91 · CHSH và QBER**.
+Chỉ một hàng **Tương quan**, dòng **Ghép bốn hạng CHSH**, rồi dòng
+**Kiểm tra QBER**. Chỉ lại **Cascade**, **Toeplitz** và **Khóa ứng dụng
+đã khớp** để nối phần đo với phần truyền tệp. Sao chép tóm tắt lượt E91.
 
-1. C bấm **Xem nhật ký lý tưởng**. Chỉ nhãn `0%`, hàng `0° / 45°` và dòng
-   ghép bốn tương quan trong **Nhật ký tính CHSH**.
+> **B nói** “E91 dùng bốn tổ hợp góc để tính CHSH. Hai nhóm đo cùng hướng
+> cung cấp vật liệu khóa. Bob đảo bit rồi hai bên lấy một phần làm mẫu
+> QBER. Trong lượt này, cận dưới của khoảng `|S|` vượt 2 và QBER đạt điều
+> kiện mô hình, nên phiên tiếp tục qua hậu xử lý và gửi tệp.”
 
-   > **C** “Hàng đầu tính (29 + 25 − 196 − 201) / 451 ≈ −0,7605.
-   > Ghép bốn hệ số theo dấu cộng, trừ, cộng, cộng cho S ≈ −2,8313.
-   > Biểu đồ lấy trị tuyệt đối. QBER của lượt này là 0 trên 969 cặp.”
+### 6:45–8:00 · C đối chiếu log, A kết thúc
 
-2. C cuộn lên và bấm **Xem nhật ký có nhiễu**. Chỉ nhãn `50%`, kết quả
-   `S ≈ −1,3359` và hai hàng trong **Nhật ký tính QBER**.
+**C chiếu bảng ghi của hai lượt.** Đọc các số đo vừa lưu trên Bob.
 
-   > **C** “QBER dùng hai nhóm đo cùng hướng. Sau khi Bob đảo bit, các
-   > lượt vốn cùng dấu được tính là lỗi. Hai nhóm có 102 và 139 lỗi.
-   > Cộng lại là 241 lỗi trên 495 + 474 = 969 cặp, tức 24,87%.”
+| Cần đối chiếu | BB84 | E91 |
+|---|---|---|
+| Giám sát trước hậu xử lý | Sàng lọc theo cơ sở Z/X, QBER mẫu và Wilson 95%. | Bốn hệ số tương quan và khoảng 95% của `|S|`, cùng QBER mẫu và Wilson 95%. |
+| Mã phiên | Trùng giữa Alice và Bob trong lượt BB84. | Trùng giữa Alice và Bob trong lượt E91, khác lượt BB84. |
+| Sau khi đạt giám sát | Cascade → Toeplitz → xác nhận khóa → truyền tệp. | Cùng các bước hậu xử lý và truyền tệp. |
+| Bằng chứng tệp nhận | Bob báo hoàn tất và ghi SHA-256. | SHA-256 trùng lượt BB84 khi gửi cùng nội dung. |
 
-3. C cuộn lên hai biểu đồ và nhường lời cho A.
+> **C nói** “Điểm khác thấy rõ trong log là E91 kiểm tra thêm CHSH. Hai
+> lượt đều đối soát, xác nhận khóa và nhận được cùng tệp. Mã phiên khác
+> nhau vì mỗi lần gửi tạo một phiên mới.”
 
-   > **A** “Lượt truyền tệp vừa rồi dùng BB84. Tab E91 minh họa phép đo để
-   > đối chiếu CHSH và QBER khi tăng nhiễu. Nhóm cũng có thể chọn E91 ở cả
-   > hai máy để thử thiết lập khóa theo E91 và truyền tệp.”
+> **A kết** “Đây là hai luồng thiết lập khóa mô phỏng chạy qua TCP. Kết
+> quả cho thấy phần mềm đi qua đúng các bước của từng giao thức và Bob
+> nhận đúng dữ liệu trong hai lượt demo.”
 
-Nếu đường truyền hai máy chưa sẵn sàng, dùng tab **Mô phỏng** để trình bày
-BB84 với **Kênh sạch** và **Eve toàn phần**, rồi chuyển sang E91 ở mốc 4:10.
-Nêu rõ lúc đó phần BB84 đang chạy cục bộ. Nếu phiên mạng có kết quả khác
-dự kiến, đọc trạng thái thực tế trước khi xác nhận bước dừng.
+Đọc giá trị thực tế trên màn hình. Số bit và QBER có thể khác giữa các lượt.
+BB84 mặc định dùng 4.096 tín hiệu, E91 dùng 8.192 cặp. Trình bày số bit đầu
+ra như thống kê của mỗi phiên. Sau khi khởi động lại Bob, hộp nhận trên giao
+diện bắt đầu trống và tệp đã nhận vẫn nằm trong `outputs/received/`.
 
-### Phương án thay lượt BB84 mạng bằng E91 mạng
-
-1. Trong Setup, A và B cùng chọn **E91**, dùng lại PSK. B khởi động Bob
-   trước. A chọn **Chạy kèm Eve trên máy Alice** rồi khởi động Alice và Eve.
-2. C giữ **Chỉ chuyển tiếp**. A bấm **Gửi tệp**. B xem **Bob đã nhận** và mở
-   **Terminal tạo khóa → Xem log chi tiết → E91**. Đọc `|S|`, khoảng 95%
-   và QBER của chính phiên. Nếu cận dưới `|S|` vượt 2 và QBER đạt điều
-   kiện, phiên tiếp tục qua Cascade, Toeplitz và truyền tệp.
-3. C chọn **Làm mất tương quan**, đặt tỷ lệ `1` rồi bấm **Áp dụng chế độ**.
-   A gửi lại bằng **Gửi văn bản**. B chỉ mã phiên mới, QBER và kết luận
-   CHSH. Khi CHSH chặn phiên, **Bob đã nhận** giữ tệp cũ và không hiện nội
-   dung mới. Sau đó C dùng tab E91 cục bộ để chiếu hai lượt có cùng seed.
+Nếu phiên chưa hoàn tất, đọc bước dừng đang hiện. Khi cả hai máy chọn cùng
+giao thức và Eve báo **Chỉ chuyển tiếp**, có thể gửi lại một lần. Chỉ xác
+nhận hai tệp giống nhau sau khi Bob đã nhận và đối chiếu cả hai SHA-256.
 
 ## Phương án CLI nếu cần trình bày qua terminal
 
