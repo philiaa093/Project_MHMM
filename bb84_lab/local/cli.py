@@ -16,14 +16,17 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--study-dir", type=Path, default=OUTPUT_ROOT / "study")
     parser.add_argument("--open", action="store_true", help="Mở trình duyệt mặc định")
+    parser.add_argument("--learn", action="store_true", help="Mở web học project bằng tiếng Việt")
     args = parser.parse_args()
     try:
         server = make_server(args.port, args.study_dir)
     except (ValueError, OSError) as error:
         parser.exit(2, f"Không khởi động được giao diện: {error}\n")
     url = f"http://127.0.0.1:{server.server_address[1]}"
+    if args.learn:
+        url += "/learn/"
     print(f"BB84 Lab: {url}\nMô phỏng cổ điển; nhấn Ctrl+C để dừng.", flush=True)
-    if args.open:
+    if args.open or args.learn:
         webbrowser.open(url)
     try:
         server.serve_forever()

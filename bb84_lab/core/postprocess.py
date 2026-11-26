@@ -216,6 +216,32 @@ def postprocess(transmission, evaluation, decision, alice_auth, bob_auth, *,
     if reconciliation_seed is None:
         domain = f"bb84-cascade-v1:{evaluation.config.seed}:{evaluation.config.sample_fraction}"
         reconciliation_seed = int.from_bytes(hashlib.sha256(domain.encode("ascii")).digest()[:16], "big")
+    return postprocess_bits(
+        alice_bits, bob_bits, decision, alice_auth, bob_auth,
+        reconciliation_seed=reconciliation_seed, reconciliation_passes=reconciliation_passes,
+        tamper_parity=tamper_parity,
+    )
+
+
+def postprocess_bits(alice_bits, bob_bits, decision, alice_auth, bob_auth, *,
+                     reconciliation_seed=None, reconciliation_passes=4,
+                     tamper_parity=False, protocol="bb84"):
+    """Shared educational pipeline; callers must remove every disclosed position.
+
+    The same declared entropy budget is used for both protocols for software
+    comparison. It is not an E91/DI or BB84 finite-key security proof.
+    """
+    if protocol not in ("bb84", "e91"):
+        raise ValueError("Unknown protocol")
+    if decision["status"] != "continue":
+        return PostprocessResult("skipped", "Phiên không đủ điều kiện hậu xử lý")
+    if decision["ci_high"] >= .5:
+        return PostprocessResult("insufficient_key", "Cận lỗi không cho ngân sách entropy dương")
+    length = len(alice_bits)
+    if length != len(bob_bits):
+        raise ValueError("Retained strings have different lengths")
+    if not length:
+        return PostprocessResult("insufficient_key", "Không còn bit sau loại mẫu")
     tampered = False
 
     def exchange(sender, payload):
@@ -232,7 +258,7 @@ def postprocess(transmission, evaluation, decision, alice_auth, bob_auth, *,
         alice_bits, bob_bits, decision["qber"], exchange,
         seed=reconciliation_seed, passes=reconciliation_passes,
     )
-    context = b"bb84-model/confirm/v1\0" + alice_auth.session_id.encode() + length.to_bytes(8, "big")
+    context = (protocol + "-model/confirm/v1\0").encode("ascii") + alice_auth.session_id.encode() + length.to_bytes(8, "big")
     alice_tag = hashlib.sha256(context + pack_bits(alice_bits)).hexdigest()
     bob_tag = hashlib.sha256(context + pack_bits(corrected)).hexdigest()
     received = exchange("alice", {"kind": "key-confirm-v1", "digest": alice_tag})

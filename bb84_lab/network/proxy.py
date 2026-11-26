@@ -13,6 +13,7 @@ ATTACK_MODES = {"pass", "intercept", "tamper", "replay", "drop", "tamper-public"
 MONITOR_FIELDS = {"sample_count", "sample_errors", "qber", "ci_low", "ci_high", "status", "reason",
                   "qber_status", "qber_reason"}
 BELL_FIELDS = {"s", "abs_s", "ci_low", "ci_high", "status"}
+CONFIG_PROTOCOLS = {"config": "bb84", "e91-config": "e91"}
 
 
 def relay(alice, target, mode="pass", fraction=1.0, seed=2026, event=lambda *a, **k: None):
@@ -20,6 +21,7 @@ def relay(alice, target, mode="pass", fraction=1.0, seed=2026, event=lambda *a, 
         raise ValueError("Chế độ Eve không hợp lệ")
     rng = random.Random(seed)
     attacked = False
+    protocol = None
     configure_socket(alice)
     with socket.create_connection(target, timeout=15) as bob:
         configure_socket(bob)
@@ -34,6 +36,13 @@ def relay(alice, target, mode="pass", fraction=1.0, seed=2026, event=lambda *a, 
                 except ConnectionError:
                     return
                 destination = bob if source is alice else alice
+                if protocol is None and source is alice and frame.get("kind") == "public":
+                    payload = frame.get("payload")
+                    if (frame.get("sender") == "alice" and frame.get("sequence") == 0
+                            and isinstance(payload, dict) and isinstance(payload.get("kind"), str)):
+                        protocol = CONFIG_PROTOCOLS.get(payload["kind"])
+                        if protocol is not None:
+                            event("protocol", f"Đã quan sát cấu hình {protocol.upper()} từ Alice", protocol=protocol)
                 if source is alice and frame.get("kind") == "quantum" and mode == "intercept":
                     states = frame.get("states")
                     if type(states) is not list or any(type(s) is not int or not 0 <= s <= 3 for s in states):

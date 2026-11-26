@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef3f9">
+  <meta name="description" content="Học từng bước project BB84 Lab: từ bit, cơ sở đo đến BB84, E91, Cascade, Toeplitz và truyền tệp Alice–Eve–Bob. Có code thật, thực hành và câu hỏi tự kiểm tra.">
+  <title>Hiểu project · BB84 Lab</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/learn/learn.css">
+  <script src="/learn/content.js" defer></script>
+  <script src="/learn/learn.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Đến nội dung bài học</a>
+  <header class="mobile-header"><button class="icon-button" id="menu-toggle" aria-label="Mở mục lục" aria-expanded="false" aria-controls="sidebar">☰</button><a href="#/" class="mobile-brand">BB84 Lab <span>/ Hiểu project</span></a><button class="icon-button" data-search-open aria-label="Tìm bài học">⌕</button></header>
+  <div class="sidebar-scrim" id="sidebar-scrim" hidden></div>
+  <aside class="sidebar" id="sidebar" aria-label="Mục lục học project">
+    <a class="brand" href="#/" aria-label="BB84 Lab, trang học project"><svg viewBox="0 0 38 38" fill="none" aria-hidden="true"><path d="m9 9 20 20M9 29 29 9" stroke="currentColor" stroke-width="1.4"/><rect x="5" y="5" width="28" height="28" rx="9" stroke="currentColor" stroke-width="1.4"/><path d="M13 19h12M19 13v12" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="3" fill="currentColor"/><circle cx="29" cy="29" r="3" fill="currentColor"/></svg><span>BB84 Lab<small>Hiểu project từ đầu</small></span></a>
+    <button class="search-launch" data-search-open><span>Tìm bài, hàm, thuật ngữ</span><kbd>/</kbd></button>
+    <nav id="course-nav" aria-label="Lộ trình và công cụ"></nav>
+    <div class="sidebar-bottom"><div class="progress-label"><span>Tiến độ của bạn</span><strong id="progress-text">0/15</strong></div><progress id="course-progress" max="15" value="0" aria-label="Số bài đã học"></progress><a class="back-to-lab" href="/">Mở dashboard mô phỏng <span aria-hidden="true">↗</span></a><p>Lưu bài đã học và ghi chú trên trình duyệt này.</p></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div class="breadcrumb" id="breadcrumb">Không gian học tập</div><div class="topbar-actions"><span class="server-status" id="server-status" role="status"><span aria-hidden="true">●</span> Đang kiểm tra backend</span><button class="text-button" id="focus-toggle" aria-pressed="false">Chế độ tập trung</button></div></header>
+    <main id="main" tabindex="-1"></main>
+    <footer class="site-footer"><span>BB84 Lab · Học từ chính mã nguồn của bạn</span><span>Mô phỏng cổ điển phục vụ học tập</span></footer>
+  </div>
+  <dialog id="search-dialog" aria-labelledby="search-title"><div class="search-dialog-head"><label class="sr-only" id="search-title" for="global-search">Tìm trong bài học, thuật ngữ và code</label><input id="global-search" type="search" placeholder="Ví dụ: QBER, Toeplitz, file gửi ở đâu…" autocomplete="off"><button class="icon-button" id="search-close" aria-label="Đóng tìm kiếm">×</button></div><div id="search-results" class="search-results"></div><p class="search-hint">Tìm không dấu được · Esc để đóng</p></dialog>
+  <dialog id="abbreviation-dialog" aria-labelledby="abbreviation-title"><div class="abbreviation-dialog-head"><h2 id="abbreviation-title">Giải nghĩa từ viết tắt</h2><button class="icon-button" id="abbreviation-close" aria-label="Đóng giải thích">×</button></div><div class="abbreviation-dialog-body" id="abbreviation-detail"></div></dialog>
+  <div id="toast" role="status" class="toast" hidden></div>
+  <noscript><div class="noscript">Bật JavaScript để dùng web học. Các bài học và tương tác đều chạy cục bộ, không cần tài khoản.</div></noscript>
+</body>
+</html>

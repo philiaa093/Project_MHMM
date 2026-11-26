@@ -1,0 +1,16 @@
+{
+  "seed": 20261126,
+  "repeats": 100,
+  "bootstrap_seed": 71203,
+  "bootstrap_repeats": 1000,
+  "sample_fraction": 0.25,
+  "threshold": 0.05,
+  "min_samples": 100,
+  "yield_budgets": [4096, 8192, 16384],
+  "yield_noise": [0.0, 0.01, 0.03],
+  "detection_budget": 8192,
+  "detection_noise": [0.0, 0.01],
+  "disturbance_fractions": [0.0, 0.05, 0.1, 0.25, 0.5, 1.0],
+  "noise_budget": 8192,
+  "noise_probabilities": [0.0, 0.01, 0.03, 0.05, 0.08, 0.12, 0.16]
+}

@@ -163,8 +163,8 @@ mỗi lần gửi tạo một khóa mô hình mới qua giao thức đã chọn 
 
 ## 4. Khởi động từng vai trò bằng dòng lệnh
 
-Ví dụ dòng lệnh dưới đây dùng BB84 mặc định. Dùng **Setup** trên cả hai
-máy để chọn E91 từ giao diện.
+Ví dụ dòng lệnh cho Alice và Bob dưới đây dùng BB84 mặc định. Dùng
+**Setup** trên cả hai máy để chọn E91 từ giao diện.
 
 **Laptop Bob**, chạy trước:
 
@@ -177,6 +177,12 @@ máy để chọn E91 từ giao diện.
 ```powershell
 .\.venv\Scripts\python.exe -m bb84_lab.network eve --listen-host 100.88.0.30 --listen-port 9101 --target 100.88.0.20:9100 --mode pass --open
 ```
+
+Eve chạy riêng hiển thị **Chưa xác định giao thức** cho đến khi quan sát
+cấu hình phiên do Alice gửi. Dashboard sau đó hiện **BB84** hoặc **E91**,
+đổi nhãn chế độ và các chỉ số tương ứng. Kết quả của lượt vừa chạy được giữ
+đến khi có kết nối mới. Nhãn này dựa trên thông tin công khai mà Eve chuyển
+tiếp. Alice và Bob xác thực cấu hình bằng PSK.
 
 **Laptop Alice**, trỏ tới Eve:
 

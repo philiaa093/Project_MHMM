@@ -319,6 +319,68 @@ def check_browser_e91(root, idle):
         bob.close()
 
 
+def check_standalone_eve_protocols(root, idle):
+    import socket
+    from contextlib import contextmanager
+    from bb84_lab.network.service import NetworkNode, make_transport_server
+    from bb84_lab.network.transfer import send_transfer
+    from bb84_lab.network.transport import receive_frame
+    from bb84_lab.network.ui import make_ui_server
+
+    @contextmanager
+    def running(server):
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield server
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def read_eve(ui):
+        status, _, body = http(ui, "/api/state")
+        assert status == 200
+        return json.loads(body)
+
+    def transfer(proxy, ui, bob, protocol):
+        result = send_transfer(proxy.server_address, psk, source, protocol=protocol)
+        idle(eve)
+        idle(bob)
+        assert result["state"] == "complete"
+        assert Path(bob._received[-1]["path"]).read_bytes() == contents
+        observed = read_eve(ui)
+        assert observed["protocol"] == protocol
+        assert observed["state"] == "complete"
+        assert ("bell" in observed["statistics"]) == (protocol == "e91")
+
+    contents = b"Eve protocol observation"
+    source = root / "protocol-observation.bin"
+    source.write_bytes(contents)
+    psk = secrets.token_bytes(32)
+    bb84 = NetworkNode("bob", psk, inbox=root / "standalone-eve-bb84")
+    with make_transport_server(bb84) as bb84_server:
+        target = bb84_server.server_address
+        eve = NetworkNode("eve", target=target)
+        with running(make_transport_server(eve)) as proxy, running(make_ui_server(eve, 0)) as eve_ui:
+            assert read_eve(eve_ui)["protocol"] is None
+            with running(bb84_server):
+                transfer(proxy, eve_ui, bb84, "bb84")
+
+            e91 = NetworkNode("bob", psk, inbox=root / "standalone-eve-e91", protocol="e91")
+            with running(make_transport_server(e91, *target)):
+                transfer(proxy, eve_ui, e91, "e91")
+                with socket.create_connection(proxy.server_address, timeout=5) as probe:
+                    # Bob's challenge comes before Alice declares a protocol.
+                    assert receive_frame(probe)["kind"] == "challenge"
+                    pending = read_eve(eve_ui)
+                    assert pending["protocol"] is None and not pending["statistics"]
+                idle(eve)
+                idle(e91)
+            with running(make_transport_server(bb84, *target)):
+                transfer(proxy, eve_ui, bb84, "bb84")
+
+
 def check_network():
     """Real loopback sockets, independent endpoints and a PSK-free Eve proxy."""
     import socket
@@ -469,6 +531,7 @@ def check_network():
                 thread.join(timeout=5)
         check_browser_setup(root, idle)
         check_browser_e91(root, idle)
+        check_standalone_eve_protocols(root, idle)
 
     for raw in (struct.pack("!I", MAX_FRAME_BYTES + 1),
                 struct.pack("!I", 13) + b'{"x":1,"x":2}'):

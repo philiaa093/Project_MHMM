@@ -66,6 +66,14 @@ Linux/macOS:
 
 Mở `http://127.0.0.1:8765`; dừng bằng `Ctrl+C`. Đổi cổng bằng `--port 8766`; máy không có trình duyệt có thể bỏ `--open`. Không cần Node.js, cloud, biến môi trường hoặc dependency nghiên cứu cho ứng dụng/self-check.
 
+### Học project từ đầu
+
+```powershell
+.\.venv\Scripts\python.exe -m bb84_lab.local --learn
+```
+
+Mở web học tiếng Việt tại `http://127.0.0.1:8765/learn/`: 15 bài từ kiến thức nền đến BB84/E91, QBER, Cascade, Toeplitz, mật mã, mạng, nghiên cứu và đọc hiểu đồ thị. Có ví dụ và đồ thị study tương tác, 32 câu tự kiểm tra, bản đồ module, từ điển, tra cứu từ viết tắt/ký hiệu, ghi chú và tiến độ lưu trong trình duyệt. Phần thực hành gọi backend hiện có; trình xem code chỉ đọc các tệp nguồn trong danh sách cho phép. Dashboard có liên kết **Học project từ đầu**. Xem [hướng dẫn trang học](docs/LEARNING_WEB.md).
+
 Chạy lệnh tại gốc repository. Trong các ví dụ sau, `python` là Python của môi trường ảo: kích hoạt môi trường hoặc thay bằng đường dẫn tường minh ở trên. Dự án chạy từ checkout; chưa cấu hình `pip install .` hoặc wheel.
 
 ## Mô phỏng và Dashboard
@@ -150,6 +158,17 @@ python -m bb84_lab.research.plot_results outputs/study-new
 ```
 
 Cấu hình đầy đủ có 1.800 phiên chính và 1.500 phiên đánh giá độc lập. Hiệu chỉnh dùng tập con bộ chính; hậu xử lý chạy lại cùng phiên, không tăng số quan sát độc lập. Giữ manifest, seed, cấu hình và CSV/JSON cùng nhau. Vẽ lại ghi đè hình trong bộ được chọn; dùng bản sao nếu cần giữ hình gốc. Xem [quy trình/định dạng đầu ra](docs/RESEARCH.md) và [đề cương](docs/de_cuong_QKD_3_tuan.md).
+
+### Đối sánh hiệu quả vận hành BB84–E91
+
+```sh
+python -m bb84_lab.research.comparison --quick --no-plots --output outputs/comparison-smoke-new
+python -m bb84_lab.research.comparison --output outputs/comparison-new
+python -m bb84_lab.network.benchmark --output outputs/system-new
+python -m bb84_lab.research.plot_comparison outputs/system-new --system
+```
+
+Bộ đầy đủ có 8.800 phiên đo độc lập, dùng chung Cascade/xác nhận/Toeplitz và ghi đầu ra thật, gồm cả phiên thất bại. Đối chiếu cả cùng số tín hiệu/cặp và cùng số phép đo hai đầu; số bit công khai được thống kê riêng. Phép kiểm tra chỉ dùng QBER trên cùng dữ liệu E91 là chẩn đoán, không tăng số phiên độc lập. Benchmark TCP hai tiến trình đo tệp, thời gian và tài nguyên trên cùng máy; cần Matplotlib để vẽ và psutil để lấy mẫu RAM. Không mặc định hai mô hình can thiệp tương đương. Xem [thiết kế, định nghĩa chỉ số và giới hạn](docs/COMPARISON.md).
 
 `outputs/` bị Git bỏ qua vì còn chứa PSK, upload và tệp nhận. Dữ liệu nghiên cứu bị ignore vẫn cần sao lưu. Công bố bộ dữ liệu cần tuyển chọn/rà soát riêng; không force-add toàn thư mục.
 

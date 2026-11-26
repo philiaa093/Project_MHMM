@@ -39,6 +39,43 @@ def check_http():
             status, body = request(url)
             assert status == 200
             assert body == (Path(__file__).resolve().parents[1] / "web" / filename).read_bytes()
+        for url, filename in (("/learn", "index.html"), ("/learn/", "index.html"),
+                              ("/learn/index.html", "index.html"), ("/learn/learn.css", "learn.css"),
+                              ("/learn/content.js", "content.js"), ("/learn/learn.js", "learn.js")):
+            status, body = request(url)
+            assert status == 200
+            assert body == (Path(__file__).resolve().parents[1] / "web/simulation/learn" / filename).read_bytes()
+        status, body = request("/api/learn/sources")
+        catalog = json.loads(body)["sources"]
+        assert status == 200 and len(catalog) >= 30
+        assert len({item["path"] for item in catalog}) == len(catalog)
+        assert all(not item["path"].startswith(("outputs/", ".venv/")) for item in catalog)
+        status, body = request("/api/learn/source/bb84_lab/core/bb84.py")
+        source = json.loads(body)
+        assert status == 200
+        import hashlib
+        source_bytes = (Path(__file__).resolve().parents[1] / source["path"]).read_bytes()
+        assert source["text"] == source_bytes.decode("utf-8-sig")
+        assert source["sha256"] == hashlib.sha256(source_bytes).hexdigest()
+        simulate = next(item for item in source["symbols"] if item["name"] == "simulate")
+        assert source["text"].splitlines()[simulate["start"] - 1].startswith("def simulate(")
+        assert simulate["end"] > simulate["start"]
+        status, body = request("/api/learn/source/bb84_lab/core/secure_channel.py")
+        assert status == 200
+        assert any(item["name"] == "DemoChannel.encrypt" for item in json.loads(body)["symbols"])
+        for path, symbol in (("bb84_lab/research/plot_results.py", "plot_study"),
+                             ("bb84_lab/research/plot_comparison.py", "plot_comparison"),
+                             ("bb84_lab/research/plot_comparison.py", "plot_system")):
+            status, body = request("/api/learn/source/" + path)
+            assert status == 200
+            assert any(item["name"] == symbol for item in json.loads(body)["symbols"])
+        for unsafe in ("outputs/network/auth.key", "../requirements.txt", "%2e%2e/requirements.txt",
+                       "bb84_lab/core/../../outputs/network/auth.key", "C:/Users/DELL/.ssh/id_rsa",
+                       "bb84_lab/core/__init__.py"):
+            assert request("/api/learn/source/" + unsafe)[0] == 404
+        assert request("/learn/../../requirements.txt")[0] == 404
+        assert request("/learn/content.js", headers={"Host": "evil.example"})[0] == 403
+        assert request("/api/learn/sources", headers={"Origin": "https://evil.example"})[0] == 403
         status, body = request("/api/session", {})
         session = json.loads(body)
         assert status == 200 and session["encryption"]["roundtrip_ok"]

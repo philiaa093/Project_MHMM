@@ -7,7 +7,7 @@ from bb84_lab.research.study import check_research
 from tests.check_core import check_bb84, check_e91, check_postprocessing
 from tests.check_local_http import check_http
 from tests.check_network import check_network
-from tests.check_research import check_experiments, check_study
+from tests.check_research import check_comparison, check_experiments, check_study
 from tests.check_simulation import check_demo, check_education
 from tests.check_structure import check_project_structure
 
@@ -27,6 +27,7 @@ def main():
     check_postprocessing()
     check_research()
     check_study()
+    check_comparison()
     check_http()
     check_network()
     print("PASS: BB84/QBER, E91/CHSH, Cascade/Toeplitz, AEAD/nonce/replay, HTTP, truyền tệp Alice–Eve–Bob và nghiên cứu tái lập.")

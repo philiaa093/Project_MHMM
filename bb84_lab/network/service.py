@@ -18,11 +18,14 @@ TRACE_PAGE_SIZE = 100
 
 class NetworkNode:
     def __init__(self, role, psk=None, target=None, inbox="outputs/received", max_bytes=DEFAULT_MAX_FILE_BYTES,
-                 mode="pass", fraction=1.0, seed=2026, noise=0, *, protocol="bb84"):
-        if protocol not in PROTOCOLS:
+                 mode="pass", fraction=1.0, seed=2026, noise=0, *, protocol=None):
+        if protocol is None and role != "eve":
+            protocol = "bb84"
+        if protocol is not None and protocol not in PROTOCOLS:
             raise ValueError("Chọn giao thức BB84 hoặc E91")
         self.role, self._psk, self.target = role, psk, target
         self.protocol = protocol
+        self._observed_protocol = None
         self.inbox, self.max_bytes = Path(inbox), max_bytes
         self.mode, self.fraction, self.seed, self.noise = mode, fraction, seed, noise
         self._lock = threading.Lock()
@@ -35,7 +38,7 @@ class NetworkNode:
         self._progress = {"bytes": 0, "total": 0}
         self._trace_session_id = None
         self._trace_steps = deque(maxlen=32)
-        self._trace_details = {stage: [] for stage in (protocol, "cascade", "toeplitz")}
+        self._trace_details = {stage: [] for stage in (protocol, "cascade", "toeplitz")} if role != "eve" else {}
         self._trace_omitted = dict.fromkeys(self._trace_details, 0)
         self._trace_active = False
         self.listen_address = None
@@ -84,6 +87,7 @@ class NetworkNode:
             if code in ("connecting", "connected"):
                 self._statistics = {}
                 self._progress = {"bytes": 0, "total": 0}
+                self._observed_protocol = None
                 self._trace_active = self.role == "alice"
                 if self._trace_active:
                     self._reset_trace()
@@ -94,13 +98,17 @@ class NetworkNode:
                 self._append_trace("transfer", "Truyền dữ liệu hoàn tất", f"{message}. Tổng {values['bytes']} byte.", "ok")
             if code in ("qber", "key", "aborted"):
                 self._statistics = {**self._statistics, **values}
-            self._state = code
+            if code == "protocol":
+                self._observed_protocol = values["protocol"]
+            else:
+                self._state = code
             self._events.append({"time": datetime.now(timezone.utc).isoformat(),
                                  "code": code, "message": message, **values})
 
     def snapshot(self):
         with self._lock:
-            snapshot = {"role": self.role, "protocol": self.protocol, "state": self._state, "busy": self.busy.locked(),
+            snapshot = {"role": self.role, "protocol": self._observed_protocol or self.protocol,
+                        "state": self._state, "busy": self.busy.locked(),
                     "target": list(self.target) if self.target else None,
                     "listen": self.listen_address, "max_file_bytes": self.max_bytes,
                     "mode": self.mode, "fraction": self.fraction, "seed": self.seed,

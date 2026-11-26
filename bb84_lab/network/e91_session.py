@@ -9,6 +9,7 @@ import secrets
 
 from bb84_lab.core.bb84 import monitor
 from bb84_lab.core.e91 import ALICE_ANGLES, BELL_BOUND, BELL_PAIRS, BOB_ANGLES, bell_summary, same_outcome_probability
+from bb84_lab.core.e91_key import combine_monitoring
 from bb84_lab.core.secure_channel import AuthenticationError
 from bb84_lab.network.config import E91_PAIR_FRAME, E91_REPLACED_STATE, public_config
 from bb84_lab.network.key_trace import trace_step
@@ -46,13 +47,7 @@ def _check_session(config, bell_positions, alice_bell, bob_bell, alice_sample, b
     bell = bell_summary(counts)
     qber = monitor(sum(a != b for a, b in zip(alice_sample, bob_sample)), len(alice_sample),
                    config.threshold, config.min_samples)
-    combined_status, reason = qber["status"], qber["reason"]
-    if bell["status"] == "at_or_below_bound":
-        combined_status, reason = "chsh_rejected", "chsh_at_or_below_bound"
-    elif bell["status"] != "violation":
-        combined_status, reason = "chsh_inconclusive", "chsh_insufficient_evidence"
-    return {**qber, "status": combined_status, "reason": reason, "bell": bell,
-            "qber_status": qber["status"], "qber_reason": qber["reason"]}
+    return combine_monitoring(qber, bell)
 
 
 def _record_result(peer, config, decision, sifted, retained, event, record_details):

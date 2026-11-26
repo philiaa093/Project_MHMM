@@ -9,6 +9,7 @@ from urllib.parse import quote
 from bb84_lab.core.bb84 import Config
 from bb84_lab.core.e91 import simulate_e91
 from bb84_lab.core.secure_channel import AuthenticationError
+from bb84_lab.local.learning import read_source, source_catalog
 from bb84_lab.shared.http import LoopbackHandler, validate_message
 from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
 from bb84_lab.simulation.education import PacketInspector, lesson_session
@@ -49,13 +50,26 @@ class DemoHandler(LoopbackHandler):
             static = {"/": "simulation/index.html", "/index.html": "simulation/index.html",
                       "/shared/styles.css": "shared/styles.css",
                       "/app.js": "simulation/app.js", "/education.js": "simulation/education.js",
-                      "/e91.js": "simulation/e91.js", "/e91.css": "simulation/e91.css"}
+                      "/e91.js": "simulation/e91.js", "/e91.css": "simulation/e91.css",
+                      "/learn": "simulation/learn/index.html", "/learn/": "simulation/learn/index.html",
+                      "/learn/index.html": "simulation/learn/index.html",
+                      "/learn/learn.css": "simulation/learn/learn.css",
+                      "/learn/content.js": "simulation/learn/content.js",
+                      "/learn/learn.js": "simulation/learn/learn.js"}
             if path in static:
                 file = WEB_ROOT / static[path]
                 if not file.is_file():
                     self._error(404, "Giao diện chưa sẵn sàng", "not_found")
                     return
                 self._send(200, file.read_bytes(), CONTENT_TYPES[file.suffix])
+            elif path == "/api/learn/sources":
+                self._json(200, {"sources": source_catalog()})
+            elif path.startswith("/api/learn/source/"):
+                source = read_source(path[len("/api/learn/source/"):])
+                if source is None:
+                    self._error(404, "Tệp không nằm trong danh sách mã nguồn học tập", "not_found")
+                    return
+                self._json(200, source)
             elif path == "/api/health":
                 self._json(200, {"ok": True, "application": "BB84 Lab", "scope": "classical simulation"})
             elif path == "/api/study":

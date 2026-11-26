@@ -66,6 +66,14 @@ Linux/macOS shell:
 
 Open `http://127.0.0.1:8765`; stop with `Ctrl+C`. Use `--port 8766` if needed, or omit `--open` on a machine without a browser. The UI is Vietnamese. No Node.js, cloud account, environment variables or optional research dependencies are required for the application/self-check.
 
+### Learn the project from the beginning
+
+```powershell
+.\.venv\Scripts\python.exe -m bb84_lab.local --learn
+```
+
+This opens the Vietnamese learning site at `http://127.0.0.1:8765/learn/`: 15 lessons covering fundamentals, BB84/E91, monitoring, postprocessing, cryptography, networking, research and graph reading; 32 self-check questions; interactive examples and study charts; a module map; a glossary and searchable abbreviations/symbols; and browser-local notes/progress. Practical exercises call the existing backend. The read-only code viewer serves current files from an explicit source allowlist. The simulation dashboard links to **Học project từ đầu**. See the [learning site guide](docs/LEARNING_WEB.md).
+
 Run commands from the repository root. Below, `python` means the virtual environment interpreter: activate it or substitute its explicit path above. The project runs from source; `pip install .` and wheel distribution are not configured.
 
 ## Simulation examples
@@ -149,6 +157,17 @@ python -m bb84_lab.research.plot_results outputs/study-new
 ```
 
 The full configuration has 1,800 main and 1,500 held-out independent sessions. Calibration reuses a main subset; postprocessing replays the same sessions rather than adding independent observations. Preserve manifests, seeds, configuration and CSV/JSON together. Plot regeneration overwrites figures in the selected dataset; use a copy to preserve originals. See [research procedure/output formats](docs/RESEARCH.md) and the [Vietnamese proposal](docs/de_cuong_QKD_3_tuan.md).
+
+### BB84–E91 operational comparison
+
+```sh
+python -m bb84_lab.research.comparison --quick --no-plots --output outputs/comparison-smoke-new
+python -m bb84_lab.research.comparison --output outputs/comparison-new
+python -m bb84_lab.network.benchmark --output outputs/system-new
+python -m bb84_lab.research.plot_comparison outputs/system-new --system
+```
+
+The full design has 8,800 independent measurement sessions with actual shared Cascade, confirmation and Toeplitz processing, including unsuccessful attempts. It reports both equal signal/pair counts and equal endpoint-measurement budgets, with public disclosures recorded separately. The QBER-only E91 ablation reuses measurements and adds no independent sessions. A two-process TCP benchmark measures file transfer, timing and resources on the same host; plotting needs Matplotlib and RSS sampling needs psutil. The attack models are explicitly different. See the [comparison design, metric definitions and limitations](docs/COMPARISON.md) (Vietnamese).
 
 `outputs/` is ignored because it also contains private PSKs, uploads and received content. Ignored research data still needs backup. Publishing a curated dataset requires separate review; do not force-add the entire directory.
 

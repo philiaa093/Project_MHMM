@@ -41,8 +41,9 @@ trong cùng một mặt phẳng. [Bài gốc của Ekert](https://doi.org/10.110
 
 - **CHSH** dùng bốn nhóm `(0°,45°)`, `(0°,135°)`, `(90°,45°)` và `(90°,135°)`.
   Mỗi tương quan là `(n++ + n−− − n+− − n−+)/n`. Chỉ số `S` cộng bốn
-  tương quan theo dấu `+, −, +, +`. Kỳ vọng của `|S|` theo mô hình là
-  `2√2(1−p)`.
+  tương quan theo dấu `+, −, +, +`. **Độ lớn CHSH lý thuyết** được tính từ
+  các tương quan kỳ vọng và bằng `2√2(1−p)`. Trung bình `|S|` đo được
+  qua nhiều phiên hữu hạn có thể khác giá trị này.
 - **QBER** dùng hai nhóm cùng hướng `(45°,45°)` và `(90°,90°)`. Kết quả lý
   tưởng đối tương quan. Sau khi quy đổi bằng cách đảo bit của Bob, số lỗi
   là `n++ + n−−`. Cộng số lỗi của hai nhóm rồi chia tổng số lượt của hai
@@ -82,6 +83,8 @@ Dữ liệu đi qua TCP có thể đọc và sao chép. Điều kiện CHSH, QBE
 khóa chỉ minh họa quyết định của mô hình. [Quy trình demo mạng](NETWORK_DEMO.md#6-giao-thức-và-lưu-trữ)
 
 ## Nghiên cứu và biểu đồ
+
+Đối sánh mới về phát hiện, chịu nhiễu, sản lượng Toeplitz và hiệu năng hệ thống của **cả BB84 và E91** dùng bộ riêng `configs/comparison.json`. Xem [thiết kế đối sánh hiệu quả vận hành](COMPARISON.md), các lệnh `bb84_lab.research.comparison` và `bb84_lab.network.benchmark`. Bộ study BB84 bên dưới được giữ nguyên để bảo toàn kết quả và lựa chọn mẫu đã đóng băng.
 
 Cài phần nghiên cứu khi cần tạo lại biểu đồ hoặc chạy Qiskit/Aer; giao diện và self-check cơ bản chỉ cần `requirements.txt`:
 

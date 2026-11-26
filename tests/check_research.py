@@ -112,3 +112,107 @@ def check_study():
         if not directory.resolve().is_relative_to(scratch_root):
             raise ValueError("Thư mục kiểm tra nằm ngoài outputs")
         shutil.rmtree(directory)
+
+
+def check_comparison():
+    """Actual E91 postprocessing, disclosure separation and independent budgets."""
+    from dataclasses import replace
+    import statistics
+
+    from bb84_lab.core.bb84 import Config, monitor
+    from bb84_lab.core.e91_key import E91Config, evaluate_transmission, expected_key_qber, simulate_transmission
+    from bb84_lab.core.postprocess import postprocess_bits
+    from bb84_lab.core.secure_channel import AuthenticatedTranscript
+    from bb84_lab.network.e91_session import _check_session
+    from bb84_lab.research.comparison import load_config as comparison_config, run_comparison
+    from bb84_lab.research.comparison_analysis import ablation_summary, summarize
+    from bb84_lab.simulation.comparison import run_session
+
+    config = E91Config(signals=16384, seed=1707)
+    transmission = simulate_transmission(config)
+    decision, sample, retained = evaluate_transmission(transmission)
+    assert decision["status"] == "continue" and decision["bell"]["status"] == "violation"
+    assert not set(sample) & set(retained)
+    assert not (set(sample) | set(retained)) & set(transmission.bell_indices)
+    assert set(sample) | set(retained) == set(transmission.sifted_indices)
+    assert all(transmission.alice_settings[i] == transmission.bob_settings[i] for i in retained)
+    assert all(transmission.alice_bits[i] == transmission.bob_bits[i] for i in transmission.sifted_indices)
+    bell_positions = [(i, (transmission.alice_settings[i], transmission.bob_settings[i])) for i in transmission.bell_indices]
+    network_decision = _check_session(
+        Config(signals=config.signals), bell_positions,
+        [transmission.alice_bits[i] for i in transmission.bell_indices],
+        [1 ^ transmission.bob_bits[i] for i in transmission.bell_indices],
+        [transmission.alice_bits[i] for i in sample], [transmission.bob_bits[i] for i in sample],
+    )
+    assert decision == network_decision
+    assert simulate_transmission(config) == transmission
+    noisy = simulate_transmission(replace(config, disturbance_fraction=.25, noise_probability=.03))
+    observed = statistics.fmean(noisy.alice_bits[i] != noisy.bob_bits[i] for i in noisy.sifted_indices)
+    assert abs(observed - expected_key_qber(.25, .03)) < .025
+    for change in ({"signals": True}, {"seed": -1}, {"disturbance_fraction": float("nan")},
+                   {"noise_probability": 1.01}, {"sample_fraction": False}):
+        rejected(lambda change=change: replace(config, **change))
+
+    runs = [run_session("e91", 8192, 203), run_session("e91", 8192, 203)]
+    for run in runs:
+        assert len(run) == 2 and all(row["ready"] and row["aead_verified"] for row in run)
+        assert run[1]["postprocessing_reused"] and run[0]["y_final"] == run[1]["y_final"] >= 256
+        assert all(row["after_cascade_bits"] == row["after_confirmation_bits"] == row["retained_bits"] for row in run)
+        assert all(row["confirmation_leak_bits"] == 257 and row["parity_leak_bits"] % 2 == 0 for row in run)
+    deterministic = lambda run: [{k: v for k, v in row.items() if not k.endswith("_seconds")} for row in run]
+    assert deterministic(runs[0]) == deterministic(runs[1])
+    stopped = run_session("e91", 16, 203)
+    assert all(not row["ready"] and row["y_final"] == 0 and row["postprocess_status"] == "skipped" for row in stopped)
+    disturbed = run_session("e91", 8192, 203, disturbance_fraction=1.)
+    assert disturbed[0]["alarm"] and not disturbed[0]["monitor_pass"] and not disturbed[0]["ready"]
+    assert disturbed[0]["bell_status"] == "at_or_below_bound"
+    psk = secrets.token_bytes(32)
+    auth = [AuthenticatedTranscript(psk, "failed-confirmation") for _ in range(2)]
+    alice_bits = (0,) * 1024
+    bob_bits = tuple(int(i in (0, 1)) for i in range(1024))
+    failed = postprocess_bits(alice_bits, bob_bits, monitor(0, 500), *auth,
+                              reconciliation_seed=1, reconciliation_passes=1, protocol="e91")
+    assert failed.status == "failed" and failed.output_bits == 0 and failed._alice_key is None
+
+    scratch_root = Path(__file__).resolve().parents[1] / "outputs"
+    directory = scratch_root / f"self-check-comparison-{secrets.token_hex(16)}"
+    directory.mkdir()
+    try:
+        results = []
+        for name in ("first", "second"):
+            target = directory / name
+            manifest = run_comparison(target, quick=True, plots=False)
+            assert manifest["state"] == "complete" and manifest["mode"] == "smoke"
+            assert manifest["independent_sessions"] == 40 and manifest["observations"] == 60
+            with (target / "sessions.csv").open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            assert len({row["seed"] for row in rows}) == 40
+            assert not {"alice_bits", "bob_bits", "key", "psk", "sample_positions"} & rows[0].keys()
+            for row in rows:
+                for field in list(row):
+                    if field.endswith("_seconds"):
+                        del row[field]
+                if row["budget_mode"] == "equal_measurements":
+                    assert int(row["endpoint_measurements"]) == int(row["budget"])
+                if row["ready"] == "True":
+                    assert int(row["y_final"]) >= 256 and row["aead_verified"] == "True"
+                else:
+                    assert int(row["y_final"]) == 0
+            results.append(rows)
+            summary = json.loads((target / "summary.json").read_text(encoding="utf-8"))
+            assert all(row["sessions"] == 2 for row in summary)
+            assert all(row["false_alarm_rate"] is None for row in summary if row["disturbance_fraction"] > 0)
+            ablations = json.loads((target / "chsh_ablation.json").read_text(encoding="utf-8"))
+            assert len(ablations) == 10
+            rejected(lambda: run_comparison(target, quick=True, plots=False), FileExistsError)
+        assert results[0] == results[1]
+        base = comparison_config(Path(__file__).resolve().parents[1] / "configs/comparison.json")
+        for change in ({"repeats": 0}, {"seed": True}, {"noise_probabilities": [float("nan")]},
+                       {"yield_budgets": [4097]}, {"yield_noise": [.01, .01]}, {"unknown": 1}):
+            path = directory / "invalid.json"
+            path.write_text(json.dumps({**base, **change}), encoding="utf-8")
+            rejected(lambda: comparison_config(path))
+    finally:
+        if not directory.resolve().is_relative_to(scratch_root):
+            raise ValueError("Comparison scratch directory outside outputs")
+        shutil.rmtree(directory)

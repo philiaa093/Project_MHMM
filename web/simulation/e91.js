@@ -111,7 +111,7 @@
     const { bell, key } = result;
     const bellCount = bell.pairs.reduce((sum, pair) => sum + pair.count, 0);
     text("#e91-s", formatNumber(bell.abs_s));
-    text("#e91-s-expected", `Kỳ vọng |S| = ${formatNumber(Math.abs(bell.expected_s))}`);
+    text("#e91-s-expected", `Độ lớn CHSH lý thuyết = ${formatNumber(Math.abs(bell.expected_s))}`);
     text("#e91-s-ci", finite(bell.s) ? `Khoảng 95% cho |S| [${exact(bell.ci_low)} đến ${exact(bell.ci_high)}]`
       : "Thiếu mẫu ở ít nhất một tổ hợp đo CHSH");
     text("#e91-s-status", bellStatuses[bell.status]);

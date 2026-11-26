@@ -7,6 +7,23 @@ const labels = { idle: "Chờ phiên mới", connecting: "Đang kết nối", co
 const decisions = { continue: "Cho phép đi tiếp", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng", insufficient_key: "Không đủ bit khóa", chsh_rejected: "CHSH không vượt mốc 2", chsh_inconclusive: "CHSH chưa đủ bằng chứng" };
 const bellStatuses = { violation: "Vượt mốc 2", at_or_below_bound: "Trong giới hạn cổ điển", inconclusive: "Chưa đủ bằng chứng" };
 const modes = { pass: "Chỉ chuyển tiếp", intercept: "Chặn–đo–gửi lại", tamper: "Sửa bản mã", replay: "Phát lại", drop: "Ngắt truyền", "tamper-public": "Sửa thảo luận công khai" };
+const eveIntercept = {
+  bb84: {
+    name: modes.intercept,
+    label: "Tỷ lệ tín hiệu chặn–đo–gửi lại",
+    help: "Từ 0 đến 1, áp dụng khi chọn chặn–đo–gửi lại. Toàn phần có QBER kỳ vọng 25% khi không nhiễu.",
+  },
+  e91: {
+    name: "Làm mất tương quan",
+    label: "Tỷ lệ cặp bị làm mất tương quan",
+    help: "Từ 0 đến 1, áp dụng khi chọn làm mất tương quan. Trên các cặp bị chọn, phép đo của Bob cho kết quả ngẫu nhiên độc lập.",
+  },
+  pending: {
+    name: "Can thiệp theo giao thức",
+    label: "Tỷ lệ can thiệp",
+    help: "Từ 0 đến 1. Eve nhận diện giao thức khi Alice gửi cấu hình phiên.",
+  },
+};
 const traceStages = { auth: "Xác thực", bb84: "BB84", e91: "E91", cascade: "Cascade", toeplitz: "Toeplitz", transfer: "Truyền dữ liệu" };
 const traceStatuses = { info: "Thông tin", ok: "Đạt", stopped: "Dừng", error: "Lỗi" };
 const tracePageSize = 100;
@@ -221,8 +238,37 @@ function renderKeyTraceDetails(trace) {
   }
 }
 
+function renderProtocol() {
+  const isE91 = state.protocol === "e91";
+  const protocolName = state.protocol?.toUpperCase();
+  document.title = `${protocolName || "Eve"} qua mạng · BB84 Lab`;
+  $("protocol-badge").textContent = protocolName || "Chưa xác định giao thức";
+  $("protocol-badge").hidden = false;
+  $("decision-label").textContent = isE91 ? "Quyết định CHSH và QBER" : "Quyết định QBER";
+  for (const metric of document.querySelectorAll("[data-e91-metric]")) metric.hidden = !isE91;
+  if (state.role === "eve") {
+    $("role-description").textContent = protocolName
+      ? `Quan sát và tác động lên đường truyền mô phỏng ${protocolName}.`
+      : "Quan sát đường truyền mô phỏng. Chờ nhận cấu hình phiên từ Alice.";
+    const { name, label, help } = eveIntercept[state.protocol ?? "pending"];
+    $("eve-intercept-mode").textContent = name;
+    $("eve-fraction-label").textContent = label;
+    $("eve-fraction-help").textContent = help;
+    return;
+  }
+  $("role-description").textContent = `Gửi văn bản và tệp giữa hai máy với phiên ${protocolName} mô phỏng.`;
+  if (isE91) $("key-lesson-link").textContent = "Bài học BB84";
+  $("key-terminal-description").textContent = `Nhật ký ${protocolName}, Cascade và Toeplitz của phiên trên máy này.`;
+  for (const button of traceStageButtons) {
+    const stage = button.dataset.keyTraceStage;
+    if (stage === "e91" || stage === "bb84") button.hidden = stage !== state.protocol;
+  }
+  resetTraceDetailPage(state.protocol, 0);
+}
+
 function render(next) {
   const first = state === null;
+  const changedProtocol = state?.protocol !== next.protocol;
   state = next;
   const isE91 = state.protocol === "e91";
   if (first) {
@@ -235,25 +281,11 @@ function render(next) {
     }
     const names = { alice: "Alice · Gửi dữ liệu", bob: "Bob · Nhận dữ liệu", eve: "Eve · Điều khiển can thiệp" };
     $("role-title").textContent = names[state.role];
-    const protocolName = isE91 ? "E91" : "BB84";
-    document.title = `${protocolName} qua mạng · BB84 Lab`;
-    $("protocol-badge").textContent = protocolName;
-    $("protocol-badge").hidden = false;
-    if (isE91) $("key-lesson-link").textContent = "Bài học BB84";
     $("role-badge").textContent = embeddedEve ? "Cùng máy Alice" : state.role === "eve" ? "Máy thứ ba / máy ảo" : "Thiết bị độc lập";
-    $("role-description").textContent = state.role === "eve" ? `Quan sát và tác động lên đường truyền mô phỏng ${protocolName}.` : `Gửi văn bản và tệp giữa hai máy với phiên ${protocolName} mô phỏng.`;
     $(`${state.role}-controls`).hidden = false;
     document.querySelector(`[data-role="${state.role}"]`).classList.add("current");
     $("inbox-section").hidden = state.role !== "bob";
     $("key-terminal").hidden = !["alice", "bob"].includes(state.role);
-    $("key-terminal-description").textContent = `Nhật ký ${protocolName}, Cascade và Toeplitz của phiên trên máy này.`;
-    $("decision-label").textContent = isE91 ? "Quyết định CHSH và QBER" : "Quyết định QBER";
-    for (const metric of document.querySelectorAll("[data-e91-metric]")) metric.hidden = !isE91;
-    for (const button of traceStageButtons) {
-      const stage = button.dataset.keyTraceStage;
-      if (stage === "e91" || stage === "bb84") button.hidden = stage !== (isE91 ? "e91" : "bb84");
-    }
-    resetTraceDetailPage(isE91 ? "e91" : "bb84", 0);
     const nextRole = state.eve_available ? "Eve" : embeddedEve ? "Bob" : "Đầu tiếp theo";
     const destination = state.target ? `${nextRole}: ${state.target.join(":")}. ` : "";
     const listen = state.listen ? `Lắng nghe: ${state.listen.join(":")}.` : "";
@@ -262,13 +294,9 @@ function render(next) {
     if (state.role === "eve") {
       $("attack-mode").value = state.mode;
       $("eve-fraction").value = state.fraction;
-      if (isE91) {
-        $("eve-intercept-mode").textContent = "Làm mất tương quan";
-        $("eve-fraction-label").textContent = "Tỷ lệ cặp bị làm mất tương quan";
-        $("eve-fraction-help").textContent = "Từ 0 đến 1, áp dụng khi chọn làm mất tương quan. Trên các cặp bị chọn, phép đo của Bob cho kết quả ngẫu nhiên độc lập.";
-      }
     }
   }
+  if (first || changedProtocol) renderProtocol();
   $("connection").textContent = "Giao diện local đang kết nối";
   $("state").textContent = isE91 && state.state === "qber" ? "Đã đo CHSH và QBER" : labels[state.state] || state.state;
   $("state").dataset.state = state.state;
@@ -295,7 +323,7 @@ function render(next) {
     renderKeyTraceDetails(state.key_trace);
   }
   if (state.role === "eve") {
-    const name = isE91 && state.mode === "intercept" ? $("eve-intercept-mode").textContent : modes[state.mode];
+    const name = state.mode === "intercept" ? $("eve-intercept-mode").textContent : modes[state.mode];
     $("active-mode").textContent = `Đang dùng ${name}. Tỷ lệ ${state.fraction}.`;
   }
   const signature = JSON.stringify(state.events);
