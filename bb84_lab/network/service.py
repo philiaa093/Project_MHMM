@@ -11,6 +11,11 @@ from bb84_lab.network.transfer import receive_transfer, send_transfer
 from bb84_lab.network.proxy import relay
 
 
+TRACE_STAGES = ("bb84", "cascade", "toeplitz")
+TRACE_STAGE_LIMIT = 8192
+TRACE_PAGE_SIZE = 100
+
+
 class NetworkNode:
     def __init__(self, role, psk=None, target=None, inbox="outputs/received", max_bytes=DEFAULT_MAX_FILE_BYTES,
                  mode="pass", fraction=1.0, seed=2026, noise=0):
@@ -25,10 +30,50 @@ class NetworkNode:
         self._state = "idle"
         self._statistics = {}
         self._progress = {"bytes": 0, "total": 0}
+        self._trace_session_id = None
+        self._trace_steps = deque(maxlen=32)
+        self._trace_details = {stage: [] for stage in TRACE_STAGES}
+        self._trace_omitted = dict.fromkeys(TRACE_STAGES, 0)
+        self._trace_active = False
         self.listen_address = None
+
+    def _append_trace(self, stage, title, detail, status):
+        self._trace_steps.append({"time": datetime.now(timezone.utc).isoformat(), "stage": stage,
+                                  "title": title, "detail": detail, "status": status})
+
+    def _reset_trace(self, session_id=None):
+        self._trace_session_id = session_id
+        self._trace_steps.clear()
+        for stage, steps in self._trace_details.items():
+            steps.clear()
+            self._trace_omitted[stage] = 0
+
+    def record_details(self, stage, rows):
+        with self._lock:
+            steps = self._trace_details[stage]
+            room = TRACE_STAGE_LIMIT - len(steps)
+            self._trace_omitted[stage] += max(0, len(rows) - room)
+            time = datetime.now(timezone.utc).isoformat()
+            steps.extend({"time": time, "stage": stage, "title": title, "detail": detail, "status": status}
+                         for title, detail, status in rows[:room])
+
+    def trace_page(self, session_id, stage, offset):
+        with self._lock:
+            if self._trace_session_id != session_id:
+                return None
+            steps = self._trace_details[stage]
+            return {"session_id": session_id, "stage": stage, "offset": offset, "page_size": TRACE_PAGE_SIZE,
+                    "recorded": len(steps), "omitted": self._trace_omitted[stage],
+                    "steps": [dict(step) for step in steps[offset:offset + TRACE_PAGE_SIZE]]}
 
     def event(self, code, message, **values):
         with self._lock:
+            if code == "key_trace_begin" or code == "key_trace_step":
+                if code == "key_trace_begin":
+                    self._trace_active = True
+                    self._reset_trace(values["session_id"])
+                self._append_trace(values["stage"], message, values["detail"], values["status"])
+                return
             if code == "progress":
                 self._progress = values
                 self._state = "transferring"
@@ -36,6 +81,14 @@ class NetworkNode:
             if code in ("connecting", "connected"):
                 self._statistics = {}
                 self._progress = {"bytes": 0, "total": 0}
+                self._trace_active = self.role == "alice"
+                if self._trace_active:
+                    self._reset_trace()
+                    self._append_trace("auth", "Kết nối tới đầu nhận", message, "info")
+            if self._trace_active and code == "failed":
+                self._append_trace(self._trace_steps[-1]["stage"], "Phiên thất bại", message, "error")
+            if self._trace_active and code == "complete":
+                self._append_trace("transfer", "Truyền dữ liệu hoàn tất", f"{message}. Tổng {values['bytes']} byte.", "ok")
             if code in ("qber", "key", "aborted"):
                 self._statistics = {**self._statistics, **values}
             self._state = code
@@ -44,13 +97,19 @@ class NetworkNode:
 
     def snapshot(self):
         with self._lock:
-            return {"role": self.role, "state": self._state, "busy": self.busy.locked(),
+            snapshot = {"role": self.role, "state": self._state, "busy": self.busy.locked(),
                     "target": list(self.target) if self.target else None,
                     "listen": self.listen_address, "max_file_bytes": self.max_bytes,
                     "mode": self.mode, "fraction": self.fraction, "seed": self.seed,
                     "statistics": dict(self._statistics), "progress": dict(self._progress),
                     "events": list(self._events),
                     "received": [{k: v for k, v in item.items() if k != "path"} for item in self._received]}
+            if self.role in ("alice", "bob"):
+                snapshot["key_trace"] = {"session_id": self._trace_session_id,
+                                         "steps": [dict(step) for step in self._trace_steps],
+                                         "details": {stage: {"recorded": len(steps), "omitted": self._trace_omitted[stage]}
+                                                     for stage, steps in self._trace_details.items()}}
+            return snapshot
 
     def completed(self, item):
         with self._lock:
@@ -84,7 +143,8 @@ class NetworkNode:
 
         def worker():
             try:
-                send_transfer(self.target, self._psk, path, name, kind, config, self.event, self.max_bytes)
+                send_transfer(self.target, self._psk, path, name, kind, config, self.event, self.max_bytes,
+                              record_details=self.record_details)
             except Exception as error:
                 self.event("failed", _error_message(error))
             finally:
@@ -130,7 +190,7 @@ class _Handler(socketserver.BaseRequestHandler):
         try:
             if node.role == "bob":
                 receive_transfer(self.request, node._psk, node.inbox, node.event, node.max_bytes,
-                                 node.noise, node.completed)
+                                 node.noise, node.completed, record_details=node.record_details)
             else:
                 relay(self.request, node.target, node.mode, node.fraction, node.seed, node.event)
         except Exception as error:

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tạo khóa từng bước · BB84 Lab</title>
+  <link rel="stylesheet" href="/shared/styles.css">
+  <link rel="stylesheet" href="/key-lesson.css">
+  <script src="/key-lesson.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Đến nội dung</a>
+  <header class="app-header key-lesson-header">
+    <a class="brand" href="/">BB84 <span class="brand-light">Lab</span></a>
+    <a href="/">Về demo mạng</a>
+  </header>
+  <main id="main" class="key-lesson" tabindex="-1">
+    <h1>Tạo khóa từng bước</h1>
+    <p class="key-lesson-intro">Theo dõi 12 tín hiệu từ lúc Alice chuẩn bị đến khi hai bên tính được cùng chuỗi bit đầu ra. Mọi bit trên trang này là dữ liệu công khai của bài học.</p>
+
+    <nav class="key-lesson-navigation" aria-label="Các giai đoạn tạo khóa">
+      <button type="button" data-lesson-stage="bb84"><strong>BB84</strong><span>Đo và sàng lọc</span></button>
+      <button type="button" data-lesson-stage="cascade"><strong>Cascade</strong><span>Đối soát parity</span></button>
+      <button type="button" data-lesson-stage="toeplitz"><strong>Toeplitz</strong><span>Rút ngắn chuỗi bit</span></button>
+    </nav>
+
+    <section class="key-lesson-workbench" aria-labelledby="key-lesson-step">
+      <div class="key-lesson-explanation">
+        <span id="key-lesson-counter"></span>
+        <h2 id="key-lesson-step"></h2>
+        <p id="key-lesson-description"></p>
+        <p id="key-lesson-note"></p>
+        <div class="key-lesson-controls">
+          <button type="button" id="key-lesson-back">Bước trước</button>
+          <button type="button" id="key-lesson-next">Bước tiếp theo</button>
+          <button type="button" id="key-lesson-restart">Về đầu bài</button>
+        </div>
+      </div>
+      <div id="key-lesson-display" class="key-lesson-display"></div>
+      <span id="key-lesson-announcement" class="sr-only" role="status"></span>
+    </section>
+    <noscript><p>Bật JavaScript để đi qua từng bước của bài học.</p></noscript>
+  </main>
+</body>
+</html>

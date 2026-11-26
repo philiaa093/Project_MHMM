@@ -7,6 +7,7 @@ import tempfile
 from urllib.parse import quote, unquote
 
 from bb84_lab.network.config import CHUNK_BYTES, network_config
+from bb84_lab.network.setup import PSK_BYTES, SetupConflict
 from bb84_lab.shared.http import LoopbackHandler, validate_message
 from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
 
@@ -14,10 +15,26 @@ from bb84_lab.shared.paths import OUTPUT_ROOT, WEB_ROOT
 MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                ".gif": "image/gif", ".webp": "image/webp", ".mp4": "video/mp4",
                ".webm": "video/webm", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}
+KEY_TRACE_ROUTE = re.compile(r"/api/key-trace/([0-9a-f]{64})/(bb84|cascade|toeplitz)/([0-9]{1,8})")
+STATIC_FILES = {
+    "/app.js": ("network/app.js", "text/javascript; charset=utf-8"),
+    "/styles.css": ("network/styles.css", "text/css; charset=utf-8"),
+    "/shared/styles.css": ("shared/styles.css", "text/css; charset=utf-8"),
+    "/setup.js": ("network/setup.js", "text/javascript; charset=utf-8"),
+    "/setup.css": ("network/setup.css", "text/css; charset=utf-8"),
+    "/key-lesson": ("network/key-lesson.html", "text/html; charset=utf-8"),
+    "/key-lesson.js": ("network/key-lesson.js", "text/javascript; charset=utf-8"),
+    "/key-lesson.css": ("network/key-lesson.css", "text/css; charset=utf-8"),
+}
 
 
 class NetworkHandler(LoopbackHandler):
     server_version = "BB84NetworkUI/1"
+
+    @property
+    def _node(self):
+        launcher = self.server.launcher
+        return launcher.node if launcher is not None else self.server.node
 
     def _headers(self, status, length, content_type, extra=None):
         self.send_response(status)
@@ -46,15 +63,24 @@ class NetworkHandler(LoopbackHandler):
             return
         try:
             path = self._path()
-            static = {"/": ("network/index.html", "text/html; charset=utf-8"),
-                      "/app.js": ("network/app.js", "text/javascript; charset=utf-8"),
-                      "/styles.css": ("network/styles.css", "text/css; charset=utf-8"),
-                      "/shared/styles.css": ("shared/styles.css", "text/css; charset=utf-8")}
-            if path in static:
-                name, content_type = static[path]
+            launcher = self.server.launcher
+            if path in STATIC_FILES:
+                name, content_type = STATIC_FILES[path]
                 self._send(200, (WEB_ROOT / name).read_bytes(), content_type)
+            elif path == "/" or (path == "/setup" and launcher is not None):
+                page = "setup.html" if path == "/setup" or self._node is None else "index.html"
+                self._send(200, (WEB_ROOT / "network" / page).read_bytes(), "text/html; charset=utf-8")
+            elif path == "/api/setup" and launcher is not None:
+                self._json(200, launcher.snapshot())
             elif path == "/api/state":
-                self._json(200, self.server.node.snapshot())
+                node = self._node
+                if node is None:
+                    self._error(409, "Hãy chọn và khởi động Alice hoặc Bob")
+                    return
+                self._json(200, {**node.snapshot(), "setup_available": launcher is not None})
+            elif (trace := KEY_TRACE_ROUTE.fullmatch(path)) is not None:
+                session_id, stage, offset = trace.groups()
+                self._key_trace_page(session_id, stage, int(offset))
             elif re.fullmatch(r"/api/download/[0-9a-f]{32}", path):
                 self._download(path.rsplit("/", 1)[1])
             else:
@@ -64,8 +90,20 @@ class NetworkHandler(LoopbackHandler):
         except OSError:
             self._error(404, "Tệp không còn tồn tại")
 
+    def _key_trace_page(self, session_id, stage, offset):
+        node = self._node
+        if node is None or node.role == "eve":
+            self._error(404, "Log chi tiết chỉ có trên Alice và Bob")
+            return
+        page = node.trace_page(session_id, stage, offset)
+        if page is None:
+            self._error(409, "Phiên đã thay đổi. Hãy mở log của phiên hiện tại.", "stale_session")
+            return
+        self._json(200, page)
+
     def _download(self, transfer_id):
-        item = self.server.node.download(transfer_id)
+        node = self._node
+        item = node.download(transfer_id) if node is not None else None
         if item is None:
             self._error(404, "Không tìm thấy tệp đã nhận")
             return
@@ -106,13 +144,46 @@ class NetworkHandler(LoopbackHandler):
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
+    def _setup_post(self, path):
+        launcher = self.server.launcher
+        if launcher is None or path not in ("/api/setup/psk", "/api/setup/psk-import", "/api/setup/start"):
+            self._error(404, "Không tìm thấy thao tác cấu hình")
+            return
+        origins = self.headers.get_all("Origin", [])
+        if origins and origins != [f"http://{self.headers['Host']}"]:
+            self._error(403, "Nguồn yêu cầu cấu hình không hợp lệ", "forbidden_origin")
+            return
+        if path == "/api/setup/psk-import":
+            if (self.headers.get_all("Content-Type", []) != ["application/octet-stream"]
+                    or self.headers.get_all("Content-Length", []) != [str(PSK_BYTES)]
+                    or self.headers.get("Transfer-Encoding") is not None):
+                raise ValueError("Chọn tệp PSK gốc có đúng 32 byte")
+            launcher.write_psk(self.rfile.read(PSK_BYTES))
+        else:
+            payload = self._read_json()
+            if path == "/api/setup/psk":
+                if payload:
+                    raise ValueError("Yêu cầu tạo PSK không có tham số")
+                launcher.write_psk()
+            else:
+                if set(payload) != {"role", "host", "port"}:
+                    raise ValueError("Cần vai trò, địa chỉ IPv4 và cổng TCP")
+                launcher.start(payload["role"], payload["host"], payload["port"])
+        self._json(200, launcher.snapshot())
+
     def do_POST(self):
         if not self._local_request():
             return
         temporary = None
         try:
             path = self._path()
-            node = self.server.node
+            if path.startswith("/api/setup/"):
+                self._setup_post(path)
+                return
+            node = self._node
+            if node is None:
+                self._error(409, "Hãy chọn và khởi động Alice hoặc Bob")
+                return
             if path == "/api/attack":
                 payload = self._read_json()
                 if set(payload) != {"mode", "fraction"}:
@@ -160,18 +231,21 @@ class NetworkHandler(LoopbackHandler):
             node.send_background(temporary, name, kind, self.server.config)
             temporary = None  # Worker now owns and removes the upload.
             self._json(202, {"accepted": True})
+        except SetupConflict as error:
+            self._error(409, str(error))
         except (ValueError, TypeError, KeyError, UnicodeError, RecursionError) as error:
             self._error(400, str(error) if type(error) is ValueError else "Yêu cầu không hợp lệ")
         except OSError:
-            self._error(500, "Không đọc hoặc tạo được tệp tạm")
+            self._error(500, "Không đọc hoặc ghi được tệp. Kiểm tra quyền lưu trên máy này.")
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
 
 
-def make_ui_server(node, port=8770, config=None):
+def make_ui_server(node=None, port=8770, config=None, launcher=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), NetworkHandler)
     server.daemon_threads = True
     server.node = node
+    server.launcher = launcher
     server.config = network_config() if config is None else config
     return server

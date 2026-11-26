@@ -4,11 +4,17 @@ const $ = (id) => document.getElementById(id);
 const labels = { idle: "Chờ phiên mới", connecting: "Đang kết nối", connected: "Đã kết nối", qber: "Đã đo QBER", key: "Khóa đã khớp", transferring: "Đang truyền", complete: "Hoàn tất", aborted: "Đã hủy", failed: "Thất bại", configured: "Đã đổi chế độ", attack: "Đã can thiệp" };
 const decisions = { continue: "Cho phép đi tiếp", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng", insufficient_key: "Không đủ bit khóa" };
 const modes = { pass: "Chỉ chuyển tiếp", intercept: "Chặn–đo–gửi lại", tamper: "Sửa bản mã", replay: "Phát lại", drop: "Ngắt truyền", "tamper-public": "Sửa thảo luận công khai" };
+const traceStages = { auth: "Xác thực", bb84: "BB84", cascade: "Cascade", toeplitz: "Toeplitz", transfer: "Truyền dữ liệu" };
+const traceStatuses = { info: "Thông tin", ok: "Đạt", stopped: "Dừng", error: "Lỗi" };
+const tracePageSize = 100;
+const traceStageButtons = document.querySelectorAll("[data-key-trace-stage]");
 const percent = (v) => v == null ? "—" : `${(100 * v).toFixed(2)}%`;
 const bytes = (n) => n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(2)} MiB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KiB` : `${n} byte`;
 let state = null;
 let uploading = false;
 let renderedEvents = "";
+let renderedTrace = null;
+const traceDetail = { sessionId: null, stage: "bb84", offset: 0, page: null, request: null, error: "" };
 const receivedIds = new Set();
 
 function status(message, error = false) {
@@ -58,10 +64,164 @@ function addReceived(item) {
   $("inbox").prepend(article);
 }
 
+function keyTraceRow(step) {
+  const row = document.createElement("li");
+  const time = document.createElement("time");
+  time.dateTime = step.time;
+  time.textContent = new Date(step.time).toLocaleTimeString("vi-VN");
+  const line = document.createElement("div");
+  const heading = document.createElement("div");
+  heading.className = "key-terminal-line-heading";
+  const stage = document.createElement("span");
+  stage.className = "key-terminal-stage";
+  stage.textContent = traceStages[step.stage];
+  const title = document.createElement("strong");
+  title.textContent = step.title;
+  const outcome = document.createElement("span");
+  outcome.className = "key-terminal-outcome";
+  outcome.dataset.status = step.status;
+  outcome.textContent = traceStatuses[step.status];
+  const detail = document.createElement("p");
+  detail.textContent = step.detail;
+  heading.append(stage, title, outcome);
+  line.append(heading, detail);
+  row.append(time, line);
+  return row;
+}
+
+function renderKeyTrace(trace) {
+  if (!trace) return;
+  const previous = renderedTrace;
+  const refresh = !previous || (previous.session_id && previous.session_id !== trace.session_id) ||
+    !previous.steps.every((step, index) => JSON.stringify(step) === JSON.stringify(trace.steps[index]));
+  const firstNewStep = refresh ? 0 : previous.steps.length;
+  if (!refresh && previous.session_id === trace.session_id && firstNewStep === trace.steps.length) return;
+
+  const viewport = $("key-terminal-viewport");
+  const list = $("key-terminal-lines");
+  const follow = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24;
+  if (refresh) {
+    list.replaceChildren();
+    $("key-terminal-feedback").textContent = "";
+  }
+  $("key-terminal-session").textContent = trace.session_id || "Chưa có";
+  $("key-terminal-empty").hidden = trace.steps.length > 0;
+  $("key-terminal-copy").disabled = trace.steps.length === 0;
+
+  for (const step of trace.steps.slice(firstNewStep)) {
+    list.append(keyTraceRow(step));
+  }
+
+  if (refresh) viewport.scrollTop = 0;
+  else if (follow) viewport.scrollTop = viewport.scrollHeight;
+  renderedTrace = trace;
+}
+
+async function copyKeyTrace() {
+  const trace = renderedTrace;
+  if (!trace?.steps.length) return;
+  const title = `Terminal tạo khóa · ${state.role === "alice" ? "Alice" : "Bob"} · Phiên ${trace.session_id || "chưa có mã"}`;
+  const lines = trace.steps.map((step) =>
+    `[${step.time}] [${traceStages[step.stage]}] [${traceStatuses[step.status]}] ${step.title}\n${step.detail}`);
+  try {
+    await navigator.clipboard.writeText([title, ...lines].join("\n\n"));
+    $("key-terminal-feedback").textContent = "Đã sao chép log.";
+  } catch {
+    $("key-terminal-feedback").textContent = "Hãy bôi đen nội dung terminal rồi nhấn Ctrl+C để sao chép.";
+  }
+}
+
+function detailCounts() {
+  const meta = state?.key_trace?.details?.[traceDetail.stage];
+  return {
+    recorded: Math.max(meta?.recorded || 0, traceDetail.page?.recorded || 0),
+    omitted: Math.max(meta?.omitted || 0, traceDetail.page?.omitted || 0),
+  };
+}
+
+function renderTraceDetailPage() {
+  const { recorded, omitted } = detailCounts();
+  const totalOnPage = traceDetail.page?.steps.length || 0;
+  const label = $("key-trace-detail-status");
+  const text = traceDetail.error || (!traceDetail.sessionId ? "Chưa có phiên để xem chi tiết."
+    : totalOnPage ? `Dòng ${traceDetail.offset + 1}–${traceDetail.offset + totalOnPage} / ${recorded}`
+    : traceDetail.request ? "Đang tải log chi tiết…" : "Giai đoạn này chưa ghi nhận bước chi tiết.");
+  if (label.textContent !== text) label.textContent = text;
+  const omittedLabel = $("key-trace-detail-omitted");
+  omittedLabel.hidden = omitted === 0;
+  omittedLabel.textContent = omitted ? `Đã lược ${omitted} dòng vì đạt giới hạn lưu của phiên.` : "";
+  $("key-trace-detail-prev").disabled = traceDetail.offset === 0;
+  $("key-trace-detail-next").disabled = traceDetail.offset + tracePageSize >= recorded;
+  $("key-trace-detail-jump").hidden = recorded <= tracePageSize;
+  $("key-trace-detail-page").max = Math.ceil(recorded / tracePageSize);
+  $("key-trace-detail-retry").hidden = !traceDetail.error;
+  $("key-trace-detail-viewport").hidden = totalOnPage === 0;
+}
+
+function resetTraceDetailPage(stage, offset) {
+  traceDetail.request?.abort();
+  Object.assign(traceDetail, { stage, offset, page: null, request: null, error: "" });
+  for (const button of traceStageButtons) {
+    button.setAttribute("aria-pressed", String(button.dataset.keyTraceStage === stage));
+  }
+  $("key-trace-detail-lines").replaceChildren();
+  $("key-trace-detail-viewport").scrollTop = 0;
+  $("key-trace-detail-page").value = offset / tracePageSize + 1;
+}
+
+async function loadTraceDetailPage() {
+  const { sessionId, stage, offset, request, error, page } = traceDetail;
+  if (!$("key-terminal-details").open || !sessionId || request || error) return;
+  const length = page?.steps.length || 0;
+  const expected = Math.min(tracePageSize, detailCounts().recorded - offset);
+  if (length >= expected) return;
+
+  const controller = new AbortController();
+  traceDetail.request = controller;
+  renderTraceDetailPage();
+  try {
+    const response = await fetch(`/api/key-trace/${encodeURIComponent(sessionId)}/${stage}/${offset}`, {
+      cache: "no-store",
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+    });
+    if (response.status === 409) throw new Error("Phiên log đã thay đổi. Chờ terminal cập nhật phiên mới.");
+    if (!response.ok) throw new Error("Không tải được log chi tiết.");
+    const next = await response.json();
+    if (traceDetail.request !== controller) return;
+    const rows = next.steps.slice(length).map(keyTraceRow);
+    $("key-trace-detail-lines").append(...rows);
+    traceDetail.page = next;
+  } catch (failure) {
+    if (traceDetail.request === controller) {
+      traceDetail.error = failure.name === "TimeoutError" ? "Tải log chi tiết quá thời gian." : failure.message;
+    }
+  } finally {
+    if (traceDetail.request === controller) {
+      traceDetail.request = null;
+      renderTraceDetailPage();
+    }
+  }
+}
+
+function renderKeyTraceDetails(trace) {
+  const panel = $("key-terminal-details");
+  panel.hidden = !trace?.details;
+  if (panel.hidden) return;
+  if (traceDetail.sessionId !== trace.session_id) {
+    traceDetail.sessionId = trace.session_id;
+    resetTraceDetailPage("bb84", 0);
+  }
+  if (panel.open) {
+    renderTraceDetailPage();
+    loadTraceDetailPage();
+  }
+}
+
 function render(next) {
   const first = state === null;
   state = next;
   if (first) {
+    $("setup-link").hidden = !state.setup_available;
     const names = { alice: "Alice · Gửi dữ liệu", bob: "Bob · Nhận dữ liệu", eve: "Eve · Điều khiển can thiệp" };
     $("role-title").textContent = names[state.role];
     $("role-badge").textContent = state.role === "eve" ? "Máy thứ ba / máy ảo" : "Thiết bị độc lập";
@@ -69,6 +229,7 @@ function render(next) {
     $(`${state.role}-controls`).hidden = false;
     document.querySelector(`[data-role="${state.role}"]`).classList.add("current");
     $("inbox-section").hidden = state.role !== "bob";
+    $("key-terminal").hidden = !["alice", "bob"].includes(state.role);
     const destination = state.target ? `Đầu tiếp theo: ${state.target.join(":")}. ` : "";
     const listen = state.listen ? `Lắng nghe: ${state.listen.join(":")}.` : "";
     $("address-note").textContent = destination + listen;
@@ -93,6 +254,10 @@ function render(next) {
   $("transfer-progress").max = Math.max(1, progress.total || 0);
   $("transfer-progress").value = progress.bytes || 0;
   $("progress-caption").textContent = progress.total ? `${bytes(progress.bytes)} / ${bytes(progress.total)}${state.state === "complete" ? " · Đã xác thực toàn bộ" : ""}` : "Chưa truyền dữ liệu hoặc tệp rỗng";
+  if (!$("key-terminal").hidden) {
+    renderKeyTrace(state.key_trace);
+    renderKeyTraceDetails(state.key_trace);
+  }
   if (state.role === "eve") $("active-mode").textContent = `Đang dùng: ${modes[state.mode]}; tỷ lệ ${state.fraction}.`;
   const signature = JSON.stringify(state.events);
   if (signature !== renderedEvents) {
@@ -125,6 +290,33 @@ $("message").addEventListener("input", () => {
   $("text-size").textContent = `${new TextEncoder().encode($("message").value).length} / 16.384 byte UTF-8`;
 });
 $("message").dispatchEvent(new Event("input"));
+$("key-terminal-copy").addEventListener("click", copyKeyTrace);
+$("key-terminal-details").addEventListener("toggle", () => renderKeyTraceDetails(state?.key_trace));
+for (const button of traceStageButtons) {
+  button.addEventListener("click", () => {
+    const stage = button.dataset.keyTraceStage;
+    if (traceDetail.stage === stage) return;
+    resetTraceDetailPage(stage, 0);
+    renderKeyTraceDetails(state.key_trace);
+  });
+}
+for (const [button, delta] of [["key-trace-detail-prev", -tracePageSize], ["key-trace-detail-next", tracePageSize]]) {
+  $(button).addEventListener("click", () => {
+    resetTraceDetailPage(traceDetail.stage, traceDetail.offset + delta);
+    renderKeyTraceDetails(state.key_trace);
+  });
+}
+$("key-trace-detail-retry").addEventListener("click", () => {
+  traceDetail.error = "";
+  renderKeyTraceDetails(state.key_trace);
+});
+$("key-trace-detail-jump").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const offset = ($("key-trace-detail-page").valueAsNumber - 1) * tracePageSize;
+  if (offset === traceDetail.offset) return;
+  resetTraceDetailPage(traceDetail.stage, offset);
+  renderKeyTraceDetails(state.key_trace);
+});
 
 $("text-form").addEventListener("submit", async (event) => {
   event.preventDefault();

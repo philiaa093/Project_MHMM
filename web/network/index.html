@@ -12,7 +12,11 @@
   <a class="skip-link" href="#main">Đến nội dung</a>
   <header class="app-header">
     <a class="brand" href="/">BB84 <span class="brand-light">Lab</span></a>
-    <span class="network-heading">Truyền qua mạng</span>
+    <nav class="network-nav" aria-label="Demo mạng">
+      <a href="/" aria-current="page">Phiên mạng</a>
+      <a href="/key-lesson">Tạo khóa từng bước</a>
+      <a id="setup-link" href="/setup" hidden>Cấu hình</a>
+    </nav>
     <span id="connection" class="connection" role="status">Đang kết nối giao diện…</span>
   </header>
   <main id="main" tabindex="-1">
@@ -92,6 +96,44 @@
           <label for="transfer-progress">Dữ liệu qua kênh mã hóa</label>
           <progress id="transfer-progress" max="1" value="0"></progress>
           <p id="progress-caption" class="input-help">Chưa truyền dữ liệu</p>
+        </section>
+        <section id="key-terminal" class="key-terminal" aria-labelledby="key-terminal-title" hidden>
+          <div class="key-terminal-header">
+            <div>
+              <h2 id="key-terminal-title">Terminal tạo khóa</h2>
+              <p>Nhật ký BB84, Cascade và Toeplitz của phiên trên máy này.</p>
+            </div>
+            <button id="key-terminal-copy" type="button" disabled>Sao chép tóm tắt</button>
+          </div>
+          <p class="key-terminal-session">Mã phiên <code id="key-terminal-session">Chưa có</code></p>
+          <div id="key-terminal-viewport" role="region" aria-label="Các bước tạo khóa theo thứ tự thực thi" tabindex="0">
+            <p id="key-terminal-empty">Log xuất hiện khi Alice bắt đầu gửi.</p>
+            <ol id="key-terminal-lines" class="key-terminal-lines" role="log" aria-label="Các bước đã ghi nhận"></ol>
+          </div>
+          <p id="key-terminal-feedback" class="key-terminal-feedback" role="status"></p>
+          <details id="key-terminal-details" hidden>
+            <summary>Xem log chi tiết</summary>
+            <div class="key-trace-stages" role="group" aria-label="Chọn thuật toán">
+              <button type="button" data-key-trace-stage="bb84" aria-pressed="true">BB84</button>
+              <button type="button" data-key-trace-stage="cascade" aria-pressed="false">Cascade</button>
+              <button type="button" data-key-trace-stage="toeplitz" aria-pressed="false">Toeplitz</button>
+            </div>
+            <p id="key-trace-detail-status" role="status">Chưa có phiên để xem chi tiết.</p>
+            <p id="key-trace-detail-omitted" hidden></p>
+            <div id="key-trace-detail-viewport" role="region" aria-label="Trang log chi tiết" tabindex="0" hidden>
+              <ol id="key-trace-detail-lines" class="key-terminal-lines" aria-label="Các dòng log chi tiết"></ol>
+            </div>
+            <div class="key-trace-paging" role="group" aria-label="Phân trang log chi tiết">
+              <button id="key-trace-detail-prev" type="button" disabled>Trang trước</button>
+              <button id="key-trace-detail-next" type="button" disabled>Trang sau</button>
+              <button id="key-trace-detail-retry" type="button" hidden>Tải lại</button>
+              <form id="key-trace-detail-jump" hidden>
+                <label for="key-trace-detail-page">Trang</label>
+                <input id="key-trace-detail-page" type="number" min="1" step="1" required>
+                <button type="submit">Đến trang</button>
+              </form>
+            </div>
+          </details>
         </section>
         <section id="inbox-section" class="network-panel" hidden aria-labelledby="inbox-title">
           <h2 id="inbox-title">Bob đã nhận</h2>

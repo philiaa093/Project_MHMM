@@ -25,8 +25,8 @@ def pack_bits(bits):
     return (value << padding).to_bytes((len(bits) + 7) // 8, "big")
 
 
-def toeplitz_bits(bits, seed, output_bits):
-    """T[i,j] = seed[n-1+i-j], using integer bit parity for each row."""
+def toeplitz_bits(bits, seed, output_bits, *, on_row=None):
+    """T[i,j] = seed[n-1+i-j]. The observer receives only the public row mask."""
     if type(output_bits) is not int or output_bits < 1 or not bits:
         raise ValueError("Toeplitz dimensions must be positive")
     if len(seed) != len(bits) + output_bits - 1:
@@ -36,8 +36,15 @@ def toeplitz_bits(bits, seed, output_bits):
     vector = int("".join(map(str, bits)), 2)
     seed_value = int("".join(map(str, reversed(seed))), 2)
     mask = (1 << len(bits)) - 1
-    return tuple((vector & ((seed_value >> row) & mask)).bit_count() % 2
-                 for row in range(output_bits))
+    if on_row is None:
+        return tuple((vector & ((seed_value >> row) & mask)).bit_count() % 2
+                     for row in range(output_bits))
+    result = []
+    for row in range(output_bits):
+        coefficients = (seed_value >> row) & mask
+        result.append((vector & coefficients).bit_count() % 2)
+        on_row(row, coefficients)
+    return tuple(result)
 
 
 def key_budget(length, q_upper, parity_leak, confirmation_leak=CONFIRMATION_BITS):
@@ -97,8 +104,8 @@ def reconcile(alice_bits, bob_bits, qber, exchange, seed=None, passes=4):
     return corrected, leakage, corrections
 
 
-def cascade_correct(bob_bits, qber, parity, seed, passes=4):
-    """Cascade core: parity(indices, local_bits) compares with local or remote Alice."""
+def cascade_correct(bob_bits, qber, parity, seed, passes=4, *, on_pass=None, on_step=None):
+    """Compare parity with Alice and optionally observe public operations and pass totals."""
     pack_bits(bob_bits)
     if not bob_bits or type(qber) not in (int, float) or not math.isfinite(qber) or not 0 <= qber <= .5:
         raise ValueError("Invalid Cascade input")
@@ -112,10 +119,14 @@ def cascade_correct(bob_bits, qber, parity, seed, passes=4):
     blocks = []
     memberships = [[] for _ in range(length)]
 
-    def odd(indices):
-        return parity(indices, corrected)
+    def odd(indices, phase):
+        different = parity(indices, corrected)
+        if on_step is not None:
+            on_step(pass_index + 1, phase, indices, different)
+        return different
 
     for pass_index in range(passes):
+        previous_corrections = corrections
         permutation = list(range(length))
         if pass_index:
             rng.shuffle(permutation)
@@ -130,25 +141,37 @@ def cascade_correct(bob_bits, qber, parity, seed, passes=4):
                 memberships[index].append(block_id)
         pending = deque(current)
         queued = set(current)
+        first_checks = len(current)
         while pending:
             block_id = pending.popleft()
             queued.remove(block_id)
             indices = blocks[block_id]
-            if not odd(indices):
+            phase = "block"
+            if on_step is not None:
+                # Rechecks join the end of the queue, after all new blocks.
+                if first_checks:
+                    first_checks -= 1
+                else:
+                    phase = "lookback" if block_id < current[0] else "repeat"
+            if not odd(indices, phase):
                 continue
             while len(indices) > 1:
                 middle = len(indices) // 2
                 left = indices[:middle]
-                indices = left if odd(left) else indices[middle:]
+                indices = left if odd(left, "split") else indices[middle:]
             position = indices[0]
             corrected[position] ^= 1
             corrections += 1
             if corrections > 2 * length:
                 raise ValueError("Cascade correction limit exceeded")
+            if on_step is not None:
+                on_step(pass_index + 1, "flip", (position,), None)
             for affected in memberships[position]:
                 if affected != block_id and affected not in queued:
                     pending.append(affected)
                     queued.add(affected)
+        if on_pass is not None:
+            on_pass(pass_index + 1, size, len(current), corrections - previous_corrections)
     return tuple(corrected), corrections
 
 

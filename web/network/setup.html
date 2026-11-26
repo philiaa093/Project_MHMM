@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thiết lập demo hai máy · BB84 Lab</title>
+  <link rel="stylesheet" href="/shared/styles.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/setup.css">
+  <script src="/setup.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Đến nội dung</a>
+  <header class="app-header setup-header">
+    <a class="brand" href="/">BB84 <span class="brand-light">Lab</span></a>
+    <nav class="main-nav" aria-label="Demo mạng">
+      <a class="nav-link active" href="/setup" aria-current="page">Thiết lập hai máy</a>
+      <a class="nav-link" href="/key-lesson">Tạo khóa từng bước</a>
+    </nav>
+  </header>
+  <main id="main" class="setup-main" tabindex="-1">
+    <div class="page-heading">
+      <div>
+        <h1>Thiết lập demo hai máy</h1>
+        <p class="page-description">Mở trang thiết lập trên cả hai máy cùng mạng LAN hoặc VPN. Dùng chung tệp xác thực và khởi động Bob trước để Alice có thể kết nối.</p>
+      </div>
+    </div>
+
+    <div class="setup-grid">
+      <section class="network-panel setup-panel" aria-labelledby="setup-key-title">
+        <div class="setup-heading">
+          <span class="setup-number" aria-hidden="true">1</span>
+          <h2 id="setup-key-title">Khóa xác thực (PSK)</h2>
+        </div>
+        <p class="setup-description">Tạo tệp trên một máy. Chuyển tệp sang máy kia qua USB hoặc kênh riêng rồi nhập đúng tệp đó.</p>
+        <div class="setup-key-location">
+          <p id="setup-key-status" class="setup-key-status" role="status">Đang kiểm tra tệp PSK…</p>
+          <code id="setup-key-path" class="setup-key-path"></code>
+        </div>
+        <div id="setup-key-actions" class="setup-key-actions" hidden>
+          <button class="button primary" id="setup-create-psk" type="button">Tạo PSK</button>
+          <button class="button secondary" id="setup-import-psk" type="button">Nhập tệp PSK</button>
+          <input id="setup-psk-file" type="file" aria-label="Tệp PSK đã có" hidden>
+        </div>
+        <p id="setup-key-invalid" class="input-help" hidden>Kiểm tra tệp ở đường dẫn trên. Bạn có thể chuyển tệp đó sang chỗ khác rồi tải lại trang, hoặc khởi động lại với <code>--psk-file</code> trỏ tới tệp PSK đúng.</p>
+        <p id="setup-key-feedback" class="form-status setup-status" role="status"></p>
+      </section>
+
+      <section class="network-panel setup-panel" aria-labelledby="setup-role-title">
+        <div class="setup-heading">
+          <span class="setup-number" aria-hidden="true">2</span>
+          <h2 id="setup-role-title">Vai trò và địa chỉ</h2>
+        </div>
+        <form id="setup-role-form" class="setup-form">
+          <fieldset id="setup-role-options" class="setup-role-options" disabled>
+            <legend>Máy này là</legend>
+            <div class="setup-role-choices">
+              <label class="setup-role-choice">
+                <input type="radio" name="role" value="bob" aria-label="Bob" checked>
+                <span><strong>Bob</strong><small>Nhận dữ liệu</small></span>
+              </label>
+              <label class="setup-role-choice">
+                <input type="radio" name="role" value="alice" aria-label="Alice">
+                <span><strong>Alice</strong><small>Gửi dữ liệu</small></span>
+              </label>
+            </div>
+          </fieldset>
+          <div class="setup-address">
+            <div class="form-row">
+              <label for="setup-host" id="setup-host-label">IPv4 của máy này</label>
+              <input id="setup-host" name="host" type="text" autocomplete="off" spellcheck="false" placeholder="192.168.1.20" maxlength="15" required aria-describedby="setup-host-help" disabled>
+              <p class="input-help" id="setup-host-help">Chạy <code>ipconfig</code> trên máy Bob. Dùng địa chỉ IPv4 của Wi‑Fi, Ethernet hoặc VPN đang kết nối hai máy.</p>
+            </div>
+            <div class="form-row">
+              <label for="setup-port">Cổng TCP</label>
+              <input id="setup-port" name="port" type="number" min="1" max="65535" step="1" value="9100" required disabled>
+            </div>
+          </div>
+          <button class="button primary" id="setup-start" type="submit" disabled>Khởi động Bob</button>
+          <p class="input-help" id="setup-start-hint">Cần tệp PSK trước khi khởi động.</p>
+        </form>
+        <div id="setup-active" class="setup-active" hidden>
+          <p id="setup-active-role" class="receiver-note"></p>
+          <p class="input-help">Để đổi vai trò hoặc địa chỉ, dừng trình khởi động bằng <kbd>Ctrl+C</kbd> rồi mở lại.</p>
+          <a href="/" class="button primary">Mở giao diện gửi nhận</a>
+        </div>
+        <p id="setup-status" class="form-status setup-status" role="status"></p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

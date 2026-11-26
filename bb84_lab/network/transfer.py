@@ -9,6 +9,7 @@ import socket
 
 from bb84_lab.core.secure_channel import AuthenticationError, _json_bytes
 from bb84_lab.network.config import CHUNK_BYTES, DEFAULT_MAX_FILE_BYTES, network_config, public_config
+from bb84_lab.network.key_trace import begin_trace, trace_step
 from bb84_lab.network.packets import receive_encrypted, send_encrypted
 from bb84_lab.network.session import hello_alice, hello_bob, prepare_alice_channel, prepare_bob_channel
 from bb84_lab.network.transport import configure_socket
@@ -33,7 +34,7 @@ def _hash_file(path):
 
 
 def send_transfer(target, psk, path, name=None, kind="file", config=None, event=lambda *a, **k: None,
-                  max_bytes=DEFAULT_MAX_FILE_BYTES):
+                  max_bytes=DEFAULT_MAX_FILE_BYTES, *, record_details=None):
     path = Path(path)
     size = path.stat().st_size
     if size > max_bytes or kind not in ("file", "text") or (kind == "text" and size > 16384):
@@ -44,11 +45,13 @@ def send_transfer(target, psk, path, name=None, kind="file", config=None, event=
     with socket.create_connection(target, timeout=15) as connection:
         configure_socket(connection)
         peer = hello_alice(connection, psk)
+        begin_trace(event, peer.session_id)
         try:
-            channel, stats = prepare_alice_channel(peer, config, event)
+            channel, stats = prepare_alice_channel(peer, config, event, record_details=record_details)
             if channel is None:
                 event("aborted", "Phiên dừng trước mã hóa", **stats)
                 return {"state": "aborted", "statistics": stats}
+            trace_step(event, "transfer", "Bắt đầu truyền dữ liệu", "Alice dùng khóa đã xác nhận để mã hóa dữ liệu gửi Bob.")
             metadata = {"name": safe_filename(path.name if name is None else name),
                         "size": size, "sha256": digest, "kind": kind}
             send_encrypted(peer, channel, _json_bytes(metadata))
@@ -73,17 +76,19 @@ def send_transfer(target, psk, path, name=None, kind="file", config=None, event=
 
 
 def receive_transfer(connection, psk, inbox, event=lambda *a, **k: None,
-                     max_bytes=DEFAULT_MAX_FILE_BYTES, noise=0, completed=lambda item: None):
+                     max_bytes=DEFAULT_MAX_FILE_BYTES, noise=0, completed=lambda item: None, *, record_details=None):
     if type(noise) not in (int, float) or not 0 <= noise <= 1:
         raise ValueError("Nhiễu phải nằm trong [0,1]")
     configure_socket(connection)
     peer = hello_bob(connection, psk)
+    begin_trace(event, peer.session_id)
     temporary = None
     try:
-        channel, stats = prepare_bob_channel(peer, event, noise)
+        channel, stats = prepare_bob_channel(peer, event, noise, record_details=record_details)
         if channel is None:
             event("aborted", "Phiên dừng trước mã hóa", **stats)
             return None
+        trace_step(event, "transfer", "Bắt đầu nhận dữ liệu", "Bob dùng khóa đã xác nhận để giải mã và kiểm tra từng khối.")
         metadata = json.loads(receive_encrypted(peer, channel))
         size = metadata.get("size")
         digest = metadata.get("sha256")

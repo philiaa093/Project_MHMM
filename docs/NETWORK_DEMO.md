@@ -1,11 +1,14 @@
-# Demo hai laptop khác mạng và máy ảo Eve
+# Demo truyền dữ liệu giữa hai máy
+
+Chạy Alice và Bob trên hai máy cùng LAN hoặc VPN. Có thể thêm máy hoặc VM Eve
+để minh họa can thiệp vào đường truyền.
 
 ## 1. Kiến trúc
 
-Mã backend nằm trong `bb84_lab/network/`: `session.py` phụ trách BB84,
-`transfer.py` phụ trách tệp, `transport.py` phụ trách TCP và `proxy.py` là Eve.
-Giao diện nằm trong `web/network/`. Xem cây mã đầy đủ tại
-[REORGANIZATION.md](REORGANIZATION.md).
+Backend trong `bb84_lab/network/` gồm `setup.py` để khởi động vai trò từ
+trình duyệt, `session.py` cho BB84, `transfer.py` cho tệp, `transport.py` cho
+TCP và `proxy.py` cho Eve. Giao diện nằm trong `web/network/`.
+[Cây mã nguồn](REORGANIZATION.md)
 
 ```text
 Laptop Alice ── TCP tới Eve:9101 ── Máy thứ ba / VM Eve ── TCP tới Bob:9100 ── Laptop Bob
@@ -28,8 +31,8 @@ Tailscale bảo vệ đường vận chuyển Internet riêng biệt với minh 
 
 ## 2. Chuẩn bị thiết bị và mạng riêng
 
-Sao chép mã nguồn lên hai laptop và máy/VM Eve. Cài Python cùng dependency
-cơ bản, chạy PowerShell ở gốc dự án:
+Sao chép mã nguồn lên hai laptop và máy/VM Eve nếu dùng. Cài Python và các
+gói phụ thuộc cơ bản. Chạy PowerShell ở gốc dự án.
 
 ```powershell
 python -m venv .venv
@@ -40,13 +43,16 @@ python -m venv .venv
 VM Linux dùng `.venv/bin/python` thay cho `.\.venv\Scripts\python.exe`.
 Không cần Qiskit, Matplotlib, Node.js hay dependency Python mới.
 
-Cài Tailscale trên **cả hai laptop và bên trong VM Eve**, đăng nhập để các
-thiết bị tham gia cùng tailnet hoặc được chia sẻ/cho phép truy cập tương ứng.
+Nếu hai laptop ở cùng LAN, dùng IPv4 Wi-Fi hoặc Ethernet của máy Bob. Khi
+các máy ở khác mạng, cài Tailscale trên **cả hai laptop và bên trong VM Eve
+nếu dùng**. Đăng nhập để các thiết bị tham gia cùng tailnet hoặc được chia
+sẻ và cấp quyền truy cập tương ứng.
 VM có thể dùng mạng NAT của hypervisor; đăng nhập Tailscale bên trong VM để
 có địa chỉ riêng. Kiểm tra bằng `tailscale status` và
 `tailscale ping <IP-thiết-bị>`. Dùng IP Tailscale hoặc tên MagicDNS để kết
-nối. Xem [cài đặt Tailscale](https://tailscale.com/docs/how-to/quickstart) và
-[kết nối thiết bị](https://tailscale.com/docs/how-to/connect-to-devices).
+nối. Giao diện thiết lập nhận địa chỉ IPv4.
+[Cài đặt Tailscale](https://tailscale.com/docs/how-to/quickstart) ·
+[Kết nối thiết bị](https://tailscale.com/docs/how-to/connect-to-devices)
 
 Các IP bên dưới **là ví dụ**, cần thay bằng IP VPN thực:
 
@@ -65,7 +71,58 @@ TCP có thể tạo sự kiện kết nối lỗi trên dashboard; phiên gửi 
 Không cần port forwarding trên modem. Dashboard `8770` chỉ nghe loopback;
 không mở cổng dashboard cho mạng ngoài.
 
-## 3. PSK riêng cho Alice và Bob
+### Thiết lập Alice và Bob trong trình duyệt
+
+Trên cả hai máy, mở trang thiết lập tại `http://127.0.0.1:8770` bằng lệnh sau.
+
+```powershell
+.\.venv\Scripts\python.exe -m bb84_lab.network setup --open
+```
+
+1. Bấm **Tạo PSK** trên một máy hoặc dùng PSK đã có. Đường dẫn mặc định là
+   `outputs/network/auth.key`. Chuyển riêng tệp đó sang máy kia qua USB hoặc
+   kênh tin cậy. Trên máy kia, bấm **Nhập tệp PSK** và chọn đúng tệp vừa chép.
+2. Trên máy nhận, chọn **Bob**. Chạy `ipconfig` trong PowerShell để lấy IPv4
+   của máy này trên LAN hoặc VPN. Nhập IPv4 và cổng `9100`, rồi bấm
+   **Khởi động Bob**. Cho phép TCP `9100` trong tường lửa của Bob nếu cần.
+3. Trên máy gửi, chọn **Alice**. Nhập IPv4 của Bob và cùng cổng `9100`, rồi
+   bấm **Khởi động Alice**. Khi dùng Eve, nhập IPv4 và cổng TCP của Eve.
+4. Trên Alice, bấm **Gửi văn bản** hoặc **Gửi tệp**. Kết quả hiện ở **Bob đã
+   nhận**. Tệp hoàn tất nằm trong `outputs/received/` trên máy Bob.
+
+### Xem log của phiên truyền
+
+Xem **Terminal tạo khóa** trên dashboard Alice và Bob khi gửi thử. So mã phiên
+ở hai đầu để đối chiếu các bước tương ứng. Terminal hiện log của phiên đang
+chạy hoặc vừa kết thúc và ghi rõ bước dừng nếu có. Bấm **Xem log chi tiết**
+rồi chọn **BB84**, **Cascade** hoặc **Toeplitz**. Dùng **Trang trước**,
+**Trang sau** hoặc nhập số trang để xem các dòng theo thứ tự thực thi.
+
+- **BB84** hiện cặp cơ sở công khai của từng tín hiệu, kết quả sàng lọc, các
+  bit đã công khai để lấy mẫu, QBER và khoảng Wilson.
+- **Cascade** hiện từng truy vấn parity với 24 chỉ số đầu của khối và các
+  giá trị parity đã trao đổi. Bob còn thấy các bước chia khối, lật bit và
+  kiểm tra lại khối.
+- **Toeplitz** hiện ngân sách, kích thước ma trận, toàn bộ seed công khai và
+  24 hệ số đầu của mỗi hàng. Công thức và chỉ số seed cho phép dựng lại các
+  hệ số còn lại. Terminal hiện bước xác nhận khóa ứng
+  dụng sau khi khuếch đại riêng tư thành công.
+
+Log nằm trong RAM, mỗi trang có tối đa 100 dòng. Mỗi giai đoạn lưu tối đa
+8.192 dòng và đếm số dòng vượt giới hạn để hiển thị trên giao diện. Bấm
+**Sao chép tóm tắt** để lưu các mốc chính trước khi chạy phiên tiếp theo.
+PSK, khóa phiên, chuỗi bit giữ lại, giá trị đầu ra từng hàng Toeplitz và nội
+dung gửi được giữ kín trong log.
+
+Chọn **Tạo khóa từng bước** từ trang thiết lập hoặc dashboard để xem ví dụ
+giảng dạy có đầy đủ bit đầu vào, phép nhân và bit đầu ra của Toeplitz.
+
+Một trình khởi động chạy một vai trò. Muốn đổi vai trò hoặc địa chỉ, nhấn
+`Ctrl+C` rồi chạy lại lệnh `setup --open`. Chạy
+`python -m bb84_lab.network setup --help` để xem tùy chọn tệp PSK và cổng
+giao diện.
+
+## 3. Tạo PSK bằng dòng lệnh
 
 Chạy **một lần trên một trong hai laptop**:
 
@@ -80,7 +137,7 @@ nhau. Không cấp tệp này cho Eve hoặc công khai nội dung. `outputs/` v
 `*.key` được `.gitignore` bỏ qua. PSK dùng xác thực thảo luận công khai;
 mỗi lần gửi tạo một khóa mô hình mới từ BB84/hậu xử lý.
 
-## 4. Khởi động từng vai trò
+## 4. Khởi động từng vai trò bằng dòng lệnh
 
 **Laptop Bob**, chạy trước:
 

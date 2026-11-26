@@ -2,7 +2,6 @@
 
 import argparse
 from pathlib import Path
-import secrets
 import sys
 import threading
 import webbrowser
@@ -10,6 +9,7 @@ import webbrowser
 from bb84_lab.network.config import DEFAULT_MAX_FILE_BYTES, network_config
 from bb84_lab.network.proxy import ATTACK_MODES
 from bb84_lab.network.service import NetworkNode, make_transport_server
+from bb84_lab.network.setup import DEFAULT_PSK_PATH, DEFAULT_PORT, NetworkSetup, create_psk_file, read_psk_file
 from bb84_lab.network.ui import make_ui_server
 
 
@@ -20,12 +20,34 @@ def address(value):
     return host, int(port)
 
 
+def serve_setup(args, parser):
+    launcher = NetworkSetup(args.psk_file)
+    try:
+        with make_ui_server(port=args.ui_port, launcher=launcher) as ui:
+            url = f"http://127.0.0.1:{args.ui_port}"
+            print(f"Cấu hình Alice hoặc Bob: {url}")
+            print("Ctrl+C để dừng demo hoặc chọn lại vai trò.")
+            if args.open:
+                webbrowser.open(url)
+            ui.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    except OSError:
+        parser.exit(2, "Không mở được giao diện cấu hình. Hãy thử --ui-port với một cổng còn trống.\n")
+    finally:
+        launcher.close()
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Demo mạng BB84 cổ điển: Alice → Eve (tùy chọn) → Bob")
     commands = parser.add_subparsers(dest="role", required=True)
     init = commands.add_parser("init", help="Tạo PSK riêng; chỉ sao chép cho Alice và Bob")
     init.add_argument("--psk-file", type=Path, default=Path("outputs/network/auth.key"))
+    setup = commands.add_parser("setup", help="Mở giao diện tạo/nhập PSK và khởi động Alice hoặc Bob")
+    setup.add_argument("--psk-file", type=Path, default=DEFAULT_PSK_PATH)
+    setup.add_argument("--ui-port", type=int, default=8770)
+    setup.add_argument("--open", action="store_true")
     for role in ("alice", "bob", "eve"):
         command = commands.add_parser(role)
         command.add_argument("--ui-port", type=int, default=8770)
@@ -35,7 +57,7 @@ def main():
             command.add_argument("--max-file-mib", type=int, default=DEFAULT_MAX_FILE_BYTES // 1024**2)
         if role != "alice":
             command.add_argument("--listen-host", default="127.0.0.1", help="Dùng IP VPN khi chạy khác máy")
-            command.add_argument("--listen-port", type=int, default=9100 if role == "bob" else 9101)
+            command.add_argument("--listen-port", type=int, default=DEFAULT_PORT if role == "bob" else 9101)
         if role != "bob":
             command.add_argument("--target", type=address, required=True, help="Bob trực tiếp hoặc Eve: hostname:port")
         if role == "alice":
@@ -50,25 +72,28 @@ def main():
             command.add_argument("--seed", type=int, default=2026)
     args = parser.parse_args()
     if args.role == "init":
-        args.psk_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with args.psk_file.open("xb") as handle:
-                handle.write(secrets.token_bytes(32))
+            create_psk_file(args.psk_file)
         except FileExistsError:
             parser.error("Tệp PSK đã tồn tại; không ghi đè")
         print(f"Đã tạo PSK tại {args.psk_file}. Chỉ chuyển riêng tệp này cho Alice và Bob.")
         return
     if not 1 <= args.ui_port <= 65535:
         parser.error("Cổng giao diện phải từ 1 đến 65535")
+    if args.role == "setup":
+        serve_setup(args, parser)
+        return
     if args.role != "alice" and not 1 <= args.listen_port <= 65535:
         parser.error("Cổng truyền phải từ 1 đến 65535")
     if args.role != "eve":
         try:
-            psk = args.psk_file.read_bytes()
+            psk = read_psk_file(args.psk_file)
         except OSError:
             parser.error("Không đọc được PSK. Chạy lệnh init rồi chuyển tệp riêng cho hai đầu")
-        if len(psk) != 32 or not 1 <= args.max_file_mib <= 4096:
-            parser.error("PSK phải đúng 32 byte; giới hạn tệp từ 1 đến 4096 MiB")
+        except ValueError as error:
+            parser.error(str(error))
+        if not 1 <= args.max_file_mib <= 4096:
+            parser.error("Giới hạn tệp từ 1 đến 4096 MiB")
     else:
         psk = None
         if not 0 <= args.fraction <= 1 or args.seed < 0 or args.seed.bit_length() > 128:

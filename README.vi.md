@@ -89,7 +89,19 @@ Dashboard có bài học từng bước, xem gói/sửa gói/giải mã/phát l�
 
 ## Alice–Bob–Eve qua mạng
 
-Thử một máy: tạo đúng một PSK, rồi mở ba terminal với cùng môi trường ảo. `init` tạo 32 byte và từ chối ghi đè:
+Để gửi trực tiếp giữa hai máy, kết nối hai máy vào cùng mạng LAN hoặc VPN riêng. Chạy lệnh sau tại thư mục gốc dự án trên cả hai máy.
+
+```sh
+python -m bb84_lab.network setup --open
+```
+
+Mỗi máy mở trang của mình tại `http://127.0.0.1:8770`. Bấm **Tạo PSK** trên một máy hoặc dùng tệp PSK đã có. Chuyển riêng tệp ở đường dẫn hiển thị sang máy kia rồi bấm **Nhập tệp PSK** trên máy đó. Tệp mặc định là `outputs/network/auth.key`. Khởi động Bob với IPv4 của máy nhận trước, rồi khởi động Alice với cùng IPv4 và cổng TCP `9100`. Để đổi vai trò hoặc địa chỉ, nhấn `Ctrl+C` rồi chạy lại lệnh thiết lập. [Hướng dẫn demo mạng](docs/NETWORK_DEMO.md)
+
+Trên Alice hoặc Bob, xem **Terminal tạo khóa** để theo dõi phiên truyền đang chạy hoặc vừa kết thúc. Bấm **Xem log chi tiết** để xem cơ sở và bit mẫu đã công khai của BB84, từng truy vấn parity của Cascade và các hệ số công khai của Toeplitz trong phiên đó. Bob có thêm các bước chia khối, lật bit và kiểm tra lại khối. Đối chiếu mã phiên trên hai máy để ghép hai log. Log nằm trong RAM và giữ kín PSK, khóa phiên và các chuỗi bit bí mật.
+
+Mở **Tạo khóa từng bước** để xem trọn phép nhân cùng các bit đầu vào và đầu ra trong một ví dụ giảng dạy công khai.
+
+Để thêm Eve trên một máy, mở ba terminal với cùng môi trường ảo. Chạy `init` một lần để tạo tệp PSK 32 byte. Lệnh giữ nguyên tệp đã có.
 
 ```sh
 python -m bb84_lab.network init --psk-file outputs/network/auth.key

@@ -86,7 +86,19 @@ A valid JSON result can describe an aborted session with exit code 0: inspect it
 
 ## Run Alice, Bob and Eve
 
-For one machine, create one PSK, then open three terminals using the same virtual environment. `init` creates a 32-byte file and refuses overwrite:
+For a direct demo, connect two machines to the same LAN or private VPN. Start setup from the project root on each machine.
+
+```sh
+python -m bb84_lab.network setup --open
+```
+
+Each machine opens its own page at `http://127.0.0.1:8770`. On one machine, select **Tạo PSK** (create PSK) or use its existing PSK. Copy the file shown on the page to the other machine over a private channel and select **Nhập tệp PSK** (import PSK) there. The default file is `outputs/network/auth.key`. Start Bob with the IPv4 address of the receiving machine, then start Alice with that same address and TCP port `9100`. Use `Ctrl+C` and relaunch setup to change the role or address. [Network demo guide](docs/NETWORK_DEMO.md)
+
+On Alice or Bob, use **Terminal tạo khóa** (key session terminal) to follow the current or latest transfer. Select **Xem log chi tiết** (show detailed log) to browse the public BB84 bases and disclosed samples, the Cascade parity queries, and the public Toeplitz coefficients used in that session. Bob also shows Cascade splits, corrections, and rechecks. Compare the session ID on both machines to match the two traces. The trace stays in memory and keeps the PSK, session key, and private bit strings out of the log.
+
+Open **Tạo khóa từng bước** (key generation step by step) to work through the full multiplication with the input and output bits of a public teaching example.
+
+To include Eve on one machine, open three terminals using the same virtual environment. Run `init` once to create a 32-byte PSK file. The command preserves any existing file.
 
 ```sh
 python -m bb84_lab.network init --psk-file outputs/network/auth.key
