@@ -97,11 +97,13 @@ python -m bb84_lab.network setup --open
 
 Mỗi máy mở trang của mình tại `http://127.0.0.1:8770`. Bấm **Tạo PSK** trên một máy hoặc dùng tệp PSK đã có. Chuyển riêng tệp ở đường dẫn hiển thị sang máy kia rồi bấm **Nhập tệp PSK** trên máy đó. Tệp mặc định là `outputs/network/auth.key`. Khởi động Bob với IPv4 của máy nhận trước, rồi khởi động Alice với cùng IPv4 và cổng TCP `9100`. Để đổi vai trò hoặc địa chỉ, nhấn `Ctrl+C` rồi chạy lại lệnh thiết lập. [Hướng dẫn demo mạng](docs/NETWORK_DEMO.md)
 
+Để chạy Eve trên máy Alice, chọn **Chạy kèm Eve trên máy Alice** trong trang thiết lập. Giữ IPv4 và cổng TCP của Bob trong biểu mẫu rồi bấm **Khởi động Alice và Eve**. Mở **Bảng điều khiển Eve** từ dashboard Alice để chọn chế độ cho lượt gửi tiếp theo. Eve chỉ lắng nghe trên máy Alice và không dùng PSK. [Chạy Eve từ giao diện thiết lập](docs/NETWORK_DEMO.md#chạy-eve-ngay-trên-máy-alice)
+
 Trên Alice hoặc Bob, xem **Terminal tạo khóa** để theo dõi phiên truyền đang chạy hoặc vừa kết thúc. Bấm **Xem log chi tiết** để xem cơ sở và bit mẫu đã công khai của BB84, từng truy vấn parity của Cascade và các hệ số công khai của Toeplitz trong phiên đó. Bob có thêm các bước chia khối, lật bit và kiểm tra lại khối. Đối chiếu mã phiên trên hai máy để ghép hai log. Log nằm trong RAM và giữ kín PSK, khóa phiên và các chuỗi bit bí mật.
 
 Mở **Tạo khóa từng bước** để xem trọn phép nhân cùng các bit đầu vào và đầu ra trong một ví dụ giảng dạy công khai.
 
-Để thêm Eve trên một máy, mở ba terminal với cùng môi trường ảo. Chạy `init` một lần để tạo tệp PSK 32 byte. Lệnh giữ nguyên tệp đã có.
+Để chạy ba vai trò thành ba tiến trình trên cùng một máy, mở ba terminal với cùng môi trường ảo. Chạy `init` một lần để tạo tệp PSK 32 byte. Lệnh giữ nguyên tệp đã có.
 
 ```sh
 python -m bb84_lab.network init --psk-file outputs/network/auth.key

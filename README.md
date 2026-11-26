@@ -94,11 +94,13 @@ python -m bb84_lab.network setup --open
 
 Each machine opens its own page at `http://127.0.0.1:8770`. On one machine, select **Tạo PSK** (create PSK) or use its existing PSK. Copy the file shown on the page to the other machine over a private channel and select **Nhập tệp PSK** (import PSK) there. The default file is `outputs/network/auth.key`. Start Bob with the IPv4 address of the receiving machine, then start Alice with that same address and TCP port `9100`. Use `Ctrl+C` and relaunch setup to change the role or address. [Network demo guide](docs/NETWORK_DEMO.md)
 
+To include Eve on Alice's machine, select **Chạy kèm Eve trên máy Alice** on the Alice setup form. Keep Bob's IPv4 address and port in the form, then select **Khởi động Alice và Eve**. Open **Bảng điều khiển Eve** (Eve dashboard) from Alice's dashboard and select a mode for the next transfer. Eve listens locally on Alice's machine and takes no PSK. [Run Eve from browser setup](docs/NETWORK_DEMO.md#chạy-eve-ngay-trên-máy-alice)
+
 On Alice or Bob, use **Terminal tạo khóa** (key session terminal) to follow the current or latest transfer. Select **Xem log chi tiết** (show detailed log) to browse the public BB84 bases and disclosed samples, the Cascade parity queries, and the public Toeplitz coefficients used in that session. Bob also shows Cascade splits, corrections, and rechecks. Compare the session ID on both machines to match the two traces. The trace stays in memory and keeps the PSK, session key, and private bit strings out of the log.
 
 Open **Tạo khóa từng bước** (key generation step by step) to work through the full multiplication with the input and output bits of a public teaching example.
 
-To include Eve on one machine, open three terminals using the same virtual environment. Run `init` once to create a 32-byte PSK file. The command preserves any existing file.
+To run all three roles as separate processes on one machine, open three terminals using the same virtual environment. Run `init` once to create a 32-byte PSK file. The command preserves any existing file.
 
 ```sh
 python -m bb84_lab.network init --psk-file outputs/network/auth.key

@@ -25,7 +25,7 @@ def serve_setup(args, parser):
     try:
         with make_ui_server(port=args.ui_port, launcher=launcher) as ui:
             url = f"http://127.0.0.1:{args.ui_port}"
-            print(f"Cấu hình Alice hoặc Bob: {url}")
+            print(f"Cấu hình Alice, Bob và tùy chọn Eve: {url}")
             print("Ctrl+C để dừng demo hoặc chọn lại vai trò.")
             if args.open:
                 webbrowser.open(url)
@@ -44,7 +44,7 @@ def main():
     commands = parser.add_subparsers(dest="role", required=True)
     init = commands.add_parser("init", help="Tạo PSK riêng; chỉ sao chép cho Alice và Bob")
     init.add_argument("--psk-file", type=Path, default=Path("outputs/network/auth.key"))
-    setup = commands.add_parser("setup", help="Mở giao diện tạo/nhập PSK và khởi động Alice hoặc Bob")
+    setup = commands.add_parser("setup", help="Mở giao diện tạo/nhập PSK, chạy Bob hoặc Alice kèm Eve tùy chọn")
     setup.add_argument("--psk-file", type=Path, default=DEFAULT_PSK_PATH)
     setup.add_argument("--ui-port", type=int, default=8770)
     setup.add_argument("--open", action="store_true")

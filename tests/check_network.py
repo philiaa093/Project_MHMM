@@ -58,6 +58,9 @@ def check_browser_setup(root, idle):
     start = "/api/setup/start"
     create = "/api/setup/psk"
     load = "/api/setup/psk-import"
+    eve_state = "/api/eve/state"
+    eve_attack = "/api/eve/attack"
+    intercept = {"mode": "intercept", "fraction": 1}
     binary = {"Content-Type": "application/octet-stream"}
     try:
         assert b"setup.js" in http(bob_ui, "/")[2]
@@ -91,10 +94,27 @@ def check_browser_setup(root, idle):
             role_params = {"role": "bob", "host": "127.0.0.1", "port": occupied.getsockname()[1]}
             assert post(bob_ui, start, role_params)[0] == 400
             assert json.loads(http(bob_ui, "/api/setup")[2])["role"] is None
+        assert post(bob_ui, start, {**role_params, "eve": True})[0] == 400
         assert post(bob_ui, start, role_params)[0] == 200
         assert post(bob_ui, start, {**role_params, "role": "alice"})[0] == 409
-        assert post(alice_ui, start, {**role_params, "role": "alice"})[0] == 200
+        assert not json.loads(http(bob_ui, "/api/setup")[2])["eve_enabled"]
+        for server in servers:
+            assert http(server, "/eve")[0] == http(server, eve_state)[0] == 404
+            assert post(server, eve_attack, intercept)[0] == 404
+        alice_params = {**role_params, "role": "alice"}
+        assert post(alice_ui, start, {**alice_params, "eve": "true"})[0] == 400
+        status, _, response = post(alice_ui, start, {**alice_params, "eve": True})
+        assert status == 200 and json.loads(response)["eve_enabled"]
+        assert json.loads(http(alice_ui, "/api/setup")[2])["eve_enabled"]
         assert b"setup-link" in http(alice_ui, "/")[2]
+        assert http(alice_ui, "/eve")[0] == 200
+        status, _, response = http(alice_ui, eve_state)
+        eve = json.loads(response)
+        assert status == 200 and eve["role"] == "eve" and eve["mode"] == "pass"
+        assert eve["listen"][0] == "127.0.0.1" and eve["listen"][1] != role_params["port"]
+        assert eve["target"] == ["127.0.0.1", role_params["port"]]
+        assert "key_trace" not in eve and secret.hex().encode() not in response
+        assert post(alice_ui, eve_attack, intercept, "https://evil.example")[0] == 403
         for server in servers:
             assert json.loads(http(server, "/api/state")[2])["key_trace"]["steps"] == []
 
@@ -102,12 +122,16 @@ def check_browser_setup(root, idle):
         assert post(alice_ui, "/api/send-text", {"message": message})[0] == 202
         idle(alice.node)
         idle(bob.node)
+        idle(alice.eve)
         status, _, state = http(bob_ui, "/api/state")
         snapshot = json.loads(state)
         assert status == 200 and snapshot["setup_available"]
         assert snapshot["state"] == "complete" and snapshot["received"][-1]["text"] == message
 
         alice_snapshot = json.loads(http(alice_ui, "/api/state")[2])
+        assert alice_snapshot["role"] == "alice" and alice_snapshot["eve_available"]
+        assert alice_snapshot["target"] == eve["listen"]
+        assert json.loads(http(alice_ui, eve_state)[2])["state"] == "complete"
         session_id = snapshot["statistics"]["session_id"]
         data_hash = snapshot["received"][-1]["sha256"]
         private_values = message, data_hash, secret.hex()
@@ -171,6 +195,7 @@ def check_browser_setup(root, idle):
         assert post(alice_ui, "/api/send-text", {"message": message})[0] == 202
         idle(alice.node)
         idle(bob.node)
+        idle(alice.eve)
         aborted_bob = json.loads(http(bob_ui, "/api/state")[2])
         aborted_alice = json.loads(http(alice_ui, "/api/state")[2])
         new_id = aborted_bob["statistics"]["session_id"]
@@ -184,6 +209,20 @@ def check_browser_setup(root, idle):
             assert read_trace_page(ui, new_id, "cascade", 0)["steps"] == []
             assert read_trace_page(ui, new_id, "toeplitz", 0)["steps"] == []
         assert len(aborted_bob["received"]) == 1
+
+        # Change the embedded proxy from its dashboard and observe a real rejection.
+        alice_ui.config = network_config()
+        assert post(alice_ui, eve_attack, intercept)[0] == 200
+        assert post(alice_ui, "/api/send-text", {"message": "Phải dừng tại QBER"})[0] == 202
+        idle(alice.node)
+        idle(bob.node)
+        idle(alice.eve)
+        intercepted_bob = json.loads(http(bob_ui, "/api/state")[2])
+        intercepted_eve = json.loads(http(alice_ui, eve_state)[2])
+        assert intercepted_bob["state"] == "aborted" and len(intercepted_bob["received"]) == 1
+        assert intercepted_eve["mode"] == "intercept" and intercepted_eve["state"] == "aborted"
+        assert intercepted_bob["statistics"]["status"] == intercepted_eve["statistics"]["status"] == "anomalous"
+        assert any(event["code"] == "attack" for event in intercepted_eve["events"])
     finally:
         for server in servers:
             server.shutdown()

@@ -67,7 +67,10 @@
   font-size: 14px;
 }
 .setup-address input:disabled { background: #f3f6fc; }
+.setup-eve-option { align-items: flex-start; margin: 0 0 16px; }
+.setup-eve-option input { margin-top: 4px; }
 .setup-active .receiver-note { margin-top: 0; }
+.setup-active-links { display: flex; flex-wrap: wrap; gap: 0 10px; }
 .setup-active .button { margin-top: 15px; border-radius: 8px; }
 .setup-status:empty { margin-top: 0; }
 @media (max-width: 700px) {

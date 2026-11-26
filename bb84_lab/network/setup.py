@@ -1,4 +1,4 @@
-"""Local browser setup and transport ownership for a network demo role."""
+"""Local browser setup for a network demo role and its optional Eve relay."""
 
 from ipaddress import IPv4Address
 import os
@@ -50,6 +50,7 @@ class NetworkSetup:
         self._inbox = Path(inbox)
         self._lock = threading.Lock()
         self._node = None
+        self._eve = None
         self._transport = None
         self._closed = False
 
@@ -57,6 +58,11 @@ class NetworkSetup:
     def node(self):
         with self._lock:
             return self._node
+
+    @property
+    def eve(self):
+        with self._lock:
+            return self._eve
 
     def snapshot(self):
         with self._lock:
@@ -68,7 +74,7 @@ class NetworkSetup:
                 ready = False
             return {"psk_ready": ready, "psk_exists": path.exists() or path.is_symlink(),
                     "psk_path": str(path), "role": self._node.role if self._node else None,
-                    "port": DEFAULT_PORT}
+                    "eve_enabled": self._eve is not None, "port": DEFAULT_PORT}
 
     def _check_available(self):
         if self._closed or self._node is not None:
@@ -82,9 +88,11 @@ class NetworkSetup:
             except FileExistsError:
                 raise SetupConflict("Đã có tệp PSK tại vị trí này. Tệp đang dùng được giữ nguyên.") from None
 
-    def start(self, role, host, port):
+    def start(self, role, host, port, *, eve=False):
         if role not in ("alice", "bob") or type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("Chọn vai trò Alice hoặc Bob và cổng TCP từ 1 đến 65535")
+        if type(eve) is not bool or (eve and role != "alice"):
+            raise ValueError("Chỉ máy Alice có thể chọn chạy kèm Eve")
         if type(host) is not str:
             raise ValueError("Nhập địa chỉ IPv4, ví dụ 192.168.1.20")
         try:
@@ -103,22 +111,31 @@ class NetworkSetup:
             address = str(ip), port
             target = address if role == "alice" else None
             node = NetworkNode(role, psk, target=target, inbox=self._inbox)
-            if role == "bob":
+            relay = NetworkNode("eve", target=address) if eve else None
+            if eve or role == "bob":
+                listener = relay if eve else node
+                bind_address = ("127.0.0.1", 0) if eve else address
                 try:
-                    transport = make_transport_server(node, *address)
+                    transport = make_transport_server(listener, *bind_address)
                 except OSError:
-                    raise ValueError("Bob chưa mở được cổng. Kiểm tra IPv4 thuộc máy này và cổng còn trống.") from None
+                    message = ("Eve chưa mở được cổng cục bộ. Hãy thử khởi động lại."
+                               if eve else "Bob chưa mở được cổng. Kiểm tra IPv4 thuộc máy này và cổng còn trống.")
+                    raise ValueError(message) from None
                 try:
+                    if eve:
+                        node.target = transport.server_address
                     threading.Thread(target=transport.serve_forever, daemon=True).start()
                 except RuntimeError:
                     transport.server_close()
                     raise
                 self._transport = transport
             self._node = node
+            self._eve = relay
 
     def close(self):
         with self._lock:
             self._closed = True
+            self._eve = None
             transport, self._transport = self._transport, None
         if transport is not None:
             try:

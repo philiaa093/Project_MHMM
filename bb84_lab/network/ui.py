@@ -77,7 +77,16 @@ class NetworkHandler(LoopbackHandler):
                 if node is None:
                     self._error(409, "Hãy chọn và khởi động Alice hoặc Bob")
                     return
-                self._json(200, {**node.snapshot(), "setup_available": launcher is not None})
+                self._json(200, {**node.snapshot(), "setup_available": launcher is not None,
+                                 "eve_available": launcher is not None and launcher.eve is not None})
+            elif path in ("/eve", "/api/eve/state"):
+                eve = launcher.eve if launcher is not None else None
+                if eve is None:
+                    self._error(404, "Chưa bật Eve trên máy Alice")
+                elif path == "/eve":
+                    self._send(200, (WEB_ROOT / "network" / "index.html").read_bytes(), "text/html; charset=utf-8")
+                else:
+                    self._json(200, {**eve.snapshot(), "setup_available": True})
             elif (trace := KEY_TRACE_ROUTE.fullmatch(path)) is not None:
                 session_id, stage, offset = trace.groups()
                 self._key_trace_page(session_id, stage, int(offset))
@@ -166,9 +175,9 @@ class NetworkHandler(LoopbackHandler):
                     raise ValueError("Yêu cầu tạo PSK không có tham số")
                 launcher.write_psk()
             else:
-                if set(payload) != {"role", "host", "port"}:
+                if set(payload).difference({"eve"}) != {"role", "host", "port"}:
                     raise ValueError("Cần vai trò, địa chỉ IPv4 và cổng TCP")
-                launcher.start(payload["role"], payload["host"], payload["port"])
+                launcher.start(payload["role"], payload["host"], payload["port"], eve=payload.get("eve", False))
         self._json(200, launcher.snapshot())
 
     def do_POST(self):
@@ -181,10 +190,16 @@ class NetworkHandler(LoopbackHandler):
                 self._setup_post(path)
                 return
             node = self._node
+            if path == "/api/eve/attack":
+                launcher = self.server.launcher
+                node = launcher.eve if launcher is not None else None
+                if node is None:
+                    self._error(404, "Chưa bật Eve trên máy Alice")
+                    return
             if node is None:
                 self._error(409, "Hãy chọn và khởi động Alice hoặc Bob")
                 return
-            if path == "/api/attack":
+            if path in ("/api/attack", "/api/eve/attack"):
                 payload = self._read_json()
                 if set(payload) != {"mode", "fraction"}:
                     raise ValueError("Sai trường cấu hình Eve")

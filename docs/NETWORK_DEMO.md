@@ -1,7 +1,7 @@
 # Demo truyền dữ liệu giữa hai máy
 
-Chạy Alice và Bob trên hai máy cùng LAN hoặc VPN. Có thể thêm máy hoặc VM Eve
-để minh họa can thiệp vào đường truyền.
+Chạy Alice và Bob trên hai máy cùng LAN hoặc VPN. Để minh họa can thiệp vào
+đường truyền, chạy Eve ngay trên máy Alice hoặc trên máy/VM riêng.
 
 ## 1. Kiến trúc
 
@@ -86,7 +86,8 @@ Trên cả hai máy, mở trang thiết lập tại `http://127.0.0.1:8770` bằ
    của máy này trên LAN hoặc VPN. Nhập IPv4 và cổng `9100`, rồi bấm
    **Khởi động Bob**. Cho phép TCP `9100` trong tường lửa của Bob nếu cần.
 3. Trên máy gửi, chọn **Alice**. Nhập IPv4 của Bob và cùng cổng `9100`, rồi
-   bấm **Khởi động Alice**. Khi dùng Eve, nhập IPv4 và cổng TCP của Eve.
+   bấm **Khởi động Alice**. Khi chạy Eve trên máy/VM riêng, điền địa chỉ và
+   cổng TCP của máy/VM Eve.
 4. Trên Alice, bấm **Gửi văn bản** hoặc **Gửi tệp**. Kết quả hiện ở **Bob đã
    nhận**. Tệp hoàn tất nằm trong `outputs/received/` trên máy Bob.
 
@@ -117,10 +118,24 @@ dung gửi được giữ kín trong log.
 Chọn **Tạo khóa từng bước** từ trang thiết lập hoặc dashboard để xem ví dụ
 giảng dạy có đầy đủ bit đầu vào, phép nhân và bit đầu ra của Toeplitz.
 
-Một trình khởi động chạy một vai trò. Muốn đổi vai trò hoặc địa chỉ, nhấn
-`Ctrl+C` rồi chạy lại lệnh `setup --open`. Chạy
+Muốn đổi vai trò, địa chỉ hoặc bật/tắt Eve đi kèm, nhấn `Ctrl+C` rồi chạy
+lại lệnh `setup --open`. Chạy
 `python -m bb84_lab.network setup --help` để xem tùy chọn tệp PSK và cổng
 giao diện.
+
+### Chạy Eve ngay trên máy Alice
+
+1. Trên máy nhận, khởi động Bob như trên.
+2. Trên trang thiết lập của máy gửi, chọn **Alice**, điền IPv4 và cổng TCP
+   của Bob, chọn **Chạy kèm Eve trên máy Alice** rồi bấm **Khởi động Alice và Eve**.
+   Cùng một trình khởi động mở Eve trên một cổng TCP loopback tự chọn và
+   định tuyến Alice qua Eve tới Bob. Chỉ Alice và Bob dùng PSK.
+3. Trên dashboard Alice, mở **Bảng điều khiển Eve**. Trang Eve dùng cùng
+   cổng giao diện, mặc định là `http://127.0.0.1:8770/eve`. Mặc định Eve ở
+   chế độ **Chỉ chuyển tiếp**. Để đổi chế độ, chọn tùy chọn trên trang Eve,
+   bấm **Áp dụng chế độ**, rồi gửi một lượt mới trên Alice.
+
+`Ctrl+C` trong cửa sổ trình khởi động trên máy gửi dừng cả Alice lẫn Eve.
 
 ## 3. Tạo PSK bằng dòng lệnh
 

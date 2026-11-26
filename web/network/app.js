@@ -1,6 +1,8 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
+const embeddedEve = window.location.pathname === "/eve";
+const apiPrefix = embeddedEve ? "/api/eve" : "/api";
 const labels = { idle: "Chờ phiên mới", connecting: "Đang kết nối", connected: "Đã kết nối", qber: "Đã đo QBER", key: "Khóa đã khớp", transferring: "Đang truyền", complete: "Hoàn tất", aborted: "Đã hủy", failed: "Thất bại", configured: "Đã đổi chế độ", attack: "Đã can thiệp" };
 const decisions = { continue: "Cho phép đi tiếp", anomalous: "Bất thường", inconclusive: "Chưa đủ bằng chứng", insufficient_key: "Không đủ bit khóa" };
 const modes = { pass: "Chỉ chuyển tiếp", intercept: "Chặn–đo–gửi lại", tamper: "Sửa bản mã", replay: "Phát lại", drop: "Ngắt truyền", "tamper-public": "Sửa thảo luận công khai" };
@@ -222,15 +224,22 @@ function render(next) {
   state = next;
   if (first) {
     $("setup-link").hidden = !state.setup_available;
+    $("eve-link").hidden = !embeddedEve && !state.eve_available;
+    if (embeddedEve) {
+      $("network-session-link").textContent = "Về Alice";
+      $("network-session-link").removeAttribute("aria-current");
+      $("eve-link").setAttribute("aria-current", "page");
+    }
     const names = { alice: "Alice · Gửi dữ liệu", bob: "Bob · Nhận dữ liệu", eve: "Eve · Điều khiển can thiệp" };
     $("role-title").textContent = names[state.role];
-    $("role-badge").textContent = state.role === "eve" ? "Máy thứ ba / máy ảo" : "Thiết bị độc lập";
+    $("role-badge").textContent = embeddedEve ? "Cùng máy Alice" : state.role === "eve" ? "Máy thứ ba / máy ảo" : "Thiết bị độc lập";
     $("role-description").textContent = state.role === "eve" ? "Quan sát và tác động lên đường truyền giữa hai thiết bị." : "Văn bản, hình ảnh, âm thanh và video giữa hai thiết bị khác mạng.";
     $(`${state.role}-controls`).hidden = false;
     document.querySelector(`[data-role="${state.role}"]`).classList.add("current");
     $("inbox-section").hidden = state.role !== "bob";
     $("key-terminal").hidden = !["alice", "bob"].includes(state.role);
-    const destination = state.target ? `Đầu tiếp theo: ${state.target.join(":")}. ` : "";
+    const nextRole = state.eve_available ? "Eve" : embeddedEve ? "Bob" : "Đầu tiếp theo";
+    const destination = state.target ? `${nextRole}: ${state.target.join(":")}. ` : "";
     const listen = state.listen ? `Lắng nghe: ${state.listen.join(":")}.` : "";
     $("address-note").textContent = destination + listen;
     $("file-limit").textContent = `Giới hạn tệp: ${bytes(state.max_file_bytes)}.`;
@@ -358,7 +367,7 @@ $("file-form").addEventListener("submit", (event) => {
 $("eve-controls").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    await post("/api/attack", { mode: $("attack-mode").value, fraction: Number($("eve-fraction").value) });
+    await post(`${apiPrefix}/attack`, { mode: $("attack-mode").value, fraction: Number($("eve-fraction").value) });
     status("Đã áp dụng chế độ cho phiên tiếp theo.");
     await poll(false);
   } catch (error) { status(error.message, true); }
@@ -366,7 +375,7 @@ $("eve-controls").addEventListener("submit", async (event) => {
 
 async function poll(schedule = true) {
   try {
-    const response = await fetch("/api/state", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    const response = await fetch(`${apiPrefix}/state`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error("Không đọc được trạng thái");
     render(await response.json());
   } catch (error) { $("connection").textContent = "Mất kết nối giao diện; kiểm tra tiến trình Python"; }

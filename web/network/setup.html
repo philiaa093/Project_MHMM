@@ -76,13 +76,20 @@
               <input id="setup-port" name="port" type="number" min="1" max="65535" step="1" value="9100" required disabled>
             </div>
           </div>
+          <label id="setup-eve-option" class="setup-role-choice setup-eve-option" hidden>
+            <input id="setup-eve" type="checkbox" name="eve" aria-describedby="setup-eve-help" disabled>
+            <span><strong>Chạy kèm Eve trên máy Alice</strong><small id="setup-eve-help">Alice gửi qua Eve trên máy này. Eve chuyển tiếp tới IPv4 và cổng của Bob ở trên.</small></span>
+          </label>
           <button class="button primary" id="setup-start" type="submit" disabled>Khởi động Bob</button>
           <p class="input-help" id="setup-start-hint">Cần tệp PSK trước khi khởi động.</p>
         </form>
         <div id="setup-active" class="setup-active" hidden>
           <p id="setup-active-role" class="receiver-note"></p>
           <p class="input-help">Để đổi vai trò hoặc địa chỉ, dừng trình khởi động bằng <kbd>Ctrl+C</kbd> rồi mở lại.</p>
-          <a href="/" class="button primary">Mở giao diện gửi nhận</a>
+          <div class="setup-active-links">
+            <a href="/" class="button primary">Mở giao diện gửi nhận</a>
+            <a id="setup-active-eve" href="/eve" class="button secondary" hidden>Mở bảng điều khiển Eve</a>
+          </div>
         </div>
         <p id="setup-status" class="form-status setup-status" role="status"></p>
       </section>

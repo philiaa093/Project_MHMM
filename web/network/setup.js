@@ -14,10 +14,13 @@ const host = document.querySelector("#setup-host");
 const hostLabel = document.querySelector("#setup-host-label");
 const hostHelp = document.querySelector("#setup-host-help");
 const port = document.querySelector("#setup-port");
+const eveOption = document.querySelector("#setup-eve-option");
+const eve = document.querySelector("#setup-eve");
 const start = document.querySelector("#setup-start");
 const startHint = document.querySelector("#setup-start-hint");
 const active = document.querySelector("#setup-active");
 const activeRole = document.querySelector("#setup-active-role");
+const activeEve = document.querySelector("#setup-active-eve");
 const roleFeedback = document.querySelector("#setup-status");
 
 let setup = null;
@@ -35,15 +38,17 @@ function showStatus(element, message, failed = false) {
 function render() {
   const role = roleForm.elements.role.value;
   const alice = role === "alice";
-  hostLabel.textContent = alice ? "IPv4 đích" : "IPv4 của máy này";
+  const withEve = alice && eve.checked;
+  hostLabel.textContent = withEve ? "IPv4 của Bob" : alice ? "IPv4 đích" : "IPv4 của máy này";
   if (alice) {
-    hostHelp.textContent = "Nhập IPv4 và cổng đang hiển thị trên máy Bob. Nếu demo qua Eve, nhập địa chỉ và cổng của Eve.";
+    hostHelp.textContent = withEve ? "Dùng IPv4 và cổng TCP của Bob. Eve trên máy này sẽ kết nối tới địa chỉ đó."
+      : "Nhập IPv4 và cổng của Bob để gửi trực tiếp, hoặc của Eve nếu Eve đã chạy riêng.";
   } else {
     const command = document.createElement("code");
     command.textContent = "ipconfig";
     hostHelp.replaceChildren("Chạy ", command, " trên máy Bob. Dùng địa chỉ IPv4 của Wi‑Fi, Ethernet hoặc VPN đang kết nối hai máy.");
   }
-  start.textContent = `Khởi động ${roleName(role)}`;
+  start.textContent = withEve ? "Khởi động Alice và Eve" : `Khởi động ${roleName(role)}`;
 
   if (setup) {
     keyStatus.textContent = setup.psk_ready ? "PSK đã sẵn sàng" : "Chưa có PSK hợp lệ";
@@ -53,8 +58,10 @@ function render() {
     keyInvalid.hidden = !setup.psk_exists || setup.psk_ready;
     roleForm.hidden = Boolean(setup.role);
     active.hidden = !setup.role;
+    activeEve.hidden = !setup.eve_enabled;
     if (setup.role) {
-      activeRole.textContent = `${roleName(setup.role)} đang chạy trên máy này.`;
+      activeRole.textContent = setup.eve_enabled ? "Alice và Eve đang chạy trên máy này."
+        : `${roleName(setup.role)} đang chạy trên máy này.`;
     }
   }
 
@@ -63,6 +70,8 @@ function render() {
   roleOptions.disabled = !setup || pending;
   host.disabled = !setup || pending;
   port.disabled = !setup || pending;
+  eveOption.hidden = !alice;
+  eve.disabled = !alice || !setup || pending;
   start.disabled = !setup?.psk_ready || pending;
   startHint.hidden = Boolean(setup?.psk_ready);
 }
@@ -136,6 +145,7 @@ keyFile.addEventListener("change", () => {
 });
 
 roleOptions.addEventListener("change", render);
+eve.addEventListener("change", render);
 roleForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!setup?.psk_ready || setup.role || pending) return;
@@ -147,9 +157,11 @@ roleForm.addEventListener("submit", (event) => {
     host.focus();
     return;
   }
-  submit("/api/setup/start", postOptions("application/json", JSON.stringify({ role, host: address, port: listenPort })), {
+  const payload = { role, host: address, port: listenPort };
+  if (role === "alice" && eve.checked) payload.eve = true;
+  submit("/api/setup/start", postOptions("application/json", JSON.stringify(payload)), {
     feedback: roleFeedback,
-    working: `Đang khởi động ${roleName(role)}…`,
+    working: payload.eve ? "Đang khởi động Alice và Eve…" : `Đang khởi động ${roleName(role)}…`,
     redirect: true,
   });
 });
